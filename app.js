@@ -1,0 +1,614 @@
+const STORAGE_KEY = "meme-board-settings";
+const LOCAL_DATA_KEY = "meme-board-local-data";
+
+const STATUS_CLASS = {
+  "아이디어": "status-idea",
+  "제작대기": "status-wait",
+  "제작중": "status-working",
+  "컨펌요청": "status-approval",
+  "수정요청": "status-revision",
+  "승인": "status-approved",
+  "예약완료": "status-scheduled",
+  "업로드완료": "status-done",
+};
+
+const APPROVAL_CLASS = {
+  "미확인": "approval-pending",
+  "승인": "approval-approved",
+  "수정요청": "approval-revision",
+};
+
+let items = [];
+let activeFilter = "all";
+let searchQuery = "";
+let settings = loadSettings();
+
+const els = {
+  setupNotice: document.querySelector("#setupNotice"),
+  pendingCount: document.querySelector("#pendingCount"),
+  revisionCount: document.querySelector("#revisionCount"),
+  dueTodayCount: document.querySelector("#dueTodayCount"),
+  doneCount: document.querySelector("#doneCount"),
+  filterTabs: document.querySelector("#filterTabs"),
+  searchInput: document.querySelector("#searchInput"),
+  tableBody: document.querySelector("#tableBody"),
+  mobileList: document.querySelector("#mobileList"),
+  emptyState: document.querySelector("#emptyState"),
+  listCaption: document.querySelector("#listCaption"),
+  saveState: document.querySelector("#saveState"),
+  itemDialog: document.querySelector("#itemDialog"),
+  itemForm: document.querySelector("#itemForm"),
+  itemDialogTitle: document.querySelector("#itemDialogTitle"),
+  settingsDialog: document.querySelector("#settingsDialog"),
+  apiUrlInput: document.querySelector("#apiUrlInput"),
+  apiSecretInput: document.querySelector("#apiSecretInput"),
+  userNameInput: document.querySelector("#userNameInput"),
+  deleteButton: document.querySelector("#deleteButton"),
+};
+
+const form = {
+  id: document.querySelector("#itemId"),
+  title: document.querySelector("#titleInput"),
+  sourceUrl: document.querySelector("#sourceUrlInput"),
+  thumbnail: document.querySelector("#thumbnailInput"),
+  platform: document.querySelector("#platformInput"),
+  reference: document.querySelector("#referenceInput"),
+  owner: document.querySelector("#ownerInput"),
+  status: document.querySelector("#statusInput"),
+  draftUrl: document.querySelector("#draftUrlInput"),
+  approval: document.querySelector("#approvalInput"),
+  feedback: document.querySelector("#feedbackInput"),
+  dueDate: document.querySelector("#dueDateInput"),
+  scheduleDate: document.querySelector("#scheduleDateInput"),
+  uploadUrl: document.querySelector("#uploadUrlInput"),
+};
+
+document.querySelector("#newItemButton").addEventListener("click", () => openItemDialog());
+document.querySelector("#settingsButton").addEventListener("click", openSettings);
+document.querySelector("#openSetupButton").addEventListener("click", openSettings);
+document.querySelector("#refreshButton").addEventListener("click", loadItems);
+document.querySelector("#saveItemButton").addEventListener("click", saveItemFromForm);
+document.querySelector("#deleteButton").addEventListener("click", deleteCurrentItem);
+document.querySelector("#saveSettingsButton").addEventListener("click", saveSettingsFromDialog);
+document.querySelector("#clearSettingsButton").addEventListener("click", clearSettings);
+
+els.filterTabs.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-filter]");
+  if (!button) return;
+  activeFilter = button.dataset.filter;
+  document.querySelectorAll(".tab-button").forEach((tab) => {
+    tab.classList.toggle("is-active", tab === button);
+  });
+  render();
+});
+
+els.searchInput.addEventListener("input", (event) => {
+  searchQuery = event.target.value.trim().toLowerCase();
+  render();
+});
+
+els.tableBody.addEventListener("click", handleListAction);
+els.mobileList.addEventListener("click", handleListAction);
+
+loadItems();
+
+async function loadItems() {
+  setSaveState("불러오는 중");
+  els.setupNotice.hidden = hasApiSettings();
+
+  try {
+    if (hasApiSettings()) {
+      const response = await requestApi("list");
+      items = normalizeItems(response.items || []);
+    } else {
+      items = await loadLocalItems();
+    }
+    setSaveState("준비됨");
+  } catch (error) {
+    console.error(error);
+    setSaveState("연결 오류");
+    items = await loadLocalItems();
+    els.setupNotice.hidden = false;
+  }
+
+  render();
+}
+
+async function loadLocalItems() {
+  const saved = localStorage.getItem(LOCAL_DATA_KEY);
+  if (saved) {
+    return normalizeItems(JSON.parse(saved));
+  }
+
+  const response = await fetch("./data/sample-videos.json", { cache: "no-store" });
+  const data = await response.json();
+  localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(data.items));
+  return normalizeItems(data.items);
+}
+
+function render() {
+  const filtered = getFilteredItems();
+  renderSummary();
+  renderTable(filtered);
+  renderMobile(filtered);
+  els.emptyState.hidden = filtered.length > 0;
+  els.listCaption.textContent = getCaption(filtered.length);
+}
+
+function renderSummary() {
+  els.pendingCount.textContent = items.filter((item) => item.status === "컨펌요청").length;
+  els.revisionCount.textContent = items.filter((item) => item.status === "수정요청" || item.approval === "수정요청").length;
+  els.dueTodayCount.textContent = items.filter((item) => isToday(item.dueDate) && item.status !== "업로드완료").length;
+  els.doneCount.textContent = items.filter((item) => item.status === "업로드완료").length;
+}
+
+function renderTable(rows) {
+  els.tableBody.innerHTML = rows
+    .map((item) => {
+      return `
+        <tr>
+          <td>
+            <div class="video-cell">
+              ${renderThumb(item)}
+              <div>
+                <a class="video-title" href="${escapeAttr(item.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+                <span class="video-meta">${escapeHtml(item.reference || "참고 포인트 없음")}</span>
+              </div>
+            </div>
+          </td>
+          <td>${renderPlatform(item.platform)}</td>
+          <td>${renderStatus(item.status)}</td>
+          <td><span class="date-text">${escapeHtml(item.owner || "-")}</span></td>
+          <td>${renderDueDate(item.dueDate)}</td>
+          <td>${renderApproval(item.approval)}</td>
+          <td>
+            <div class="row-actions">
+              <button class="row-button approve" type="button" data-action="approve" data-id="${escapeAttr(item.id)}">승인</button>
+              <button class="row-button revise" type="button" data-action="revise" data-id="${escapeAttr(item.id)}">수정</button>
+              <button class="row-button" type="button" data-action="edit" data-id="${escapeAttr(item.id)}">열기</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function renderMobile(rows) {
+  els.mobileList.innerHTML = rows
+    .map((item) => {
+      return `
+        <article class="mobile-card">
+          <div class="mobile-main">
+            ${renderThumb(item)}
+            <div class="mobile-info">
+              <a class="video-title" href="${escapeAttr(item.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+              <div class="mobile-tags">
+                ${renderPlatform(item.platform)}
+                ${renderStatus(item.status)}
+                ${renderApproval(item.approval)}
+              </div>
+              <span class="video-meta">${escapeHtml(item.reference || "참고 포인트 없음")}</span>
+              <span class="date-text">담당 ${escapeHtml(item.owner || "-")} · 마감 ${escapeHtml(formatDate(item.dueDate))}</span>
+            </div>
+          </div>
+          <div class="mobile-actions">
+            <button class="row-button approve" type="button" data-action="approve" data-id="${escapeAttr(item.id)}">승인</button>
+            <button class="row-button revise" type="button" data-action="revise" data-id="${escapeAttr(item.id)}">수정</button>
+            <button class="row-button" type="button" data-action="edit" data-id="${escapeAttr(item.id)}">열기</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function handleListAction(event) {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+
+  const item = items.find((row) => row.id === button.dataset.id);
+  if (!item) return;
+
+  if (button.dataset.action === "edit") {
+    openItemDialog(item);
+    return;
+  }
+
+  if (button.dataset.action === "approve") {
+    updateItem({ ...item, approval: "승인", status: item.status === "업로드완료" ? item.status : "승인" });
+    return;
+  }
+
+  if (button.dataset.action === "revise") {
+    openItemDialog({ ...item, approval: "수정요청", status: "수정요청" });
+  }
+}
+
+function openItemDialog(item = null) {
+  const isEdit = Boolean(item);
+  els.itemDialogTitle.textContent = isEdit ? "콘텐츠 수정" : "새 링크 추가";
+  els.deleteButton.hidden = !isEdit;
+
+  const data = item || {
+    id: "",
+    title: "",
+    sourceUrl: "",
+    thumbnail: "",
+    platform: "인스타",
+    reference: "",
+    owner: settings.userName || "",
+    status: "아이디어",
+    draftUrl: "",
+    approval: "미확인",
+    feedback: "",
+    dueDate: "",
+    scheduleDate: "",
+    uploadUrl: "",
+  };
+
+  form.id.value = data.id || "";
+  form.title.value = data.title || "";
+  form.sourceUrl.value = data.sourceUrl || "";
+  form.thumbnail.value = data.thumbnail || "";
+  form.platform.value = data.platform || "인스타";
+  form.reference.value = data.reference || "";
+  form.owner.value = data.owner || "";
+  form.status.value = data.status || "아이디어";
+  form.draftUrl.value = data.draftUrl || "";
+  form.approval.value = data.approval || "미확인";
+  form.feedback.value = data.feedback || "";
+  form.dueDate.value = normalizeDateInput(data.dueDate);
+  form.scheduleDate.value = normalizeDateInput(data.scheduleDate);
+  form.uploadUrl.value = data.uploadUrl || "";
+
+  els.itemDialog.showModal();
+}
+
+async function saveItemFromForm() {
+  if (!els.itemForm.reportValidity()) return;
+
+  const now = new Date().toISOString();
+  const id = form.id.value || createId();
+  const current = items.find((item) => item.id === id);
+  const item = {
+    id,
+    title: form.title.value.trim(),
+    sourceUrl: form.sourceUrl.value.trim(),
+    thumbnail: form.thumbnail.value.trim(),
+    platform: form.platform.value,
+    reference: form.reference.value.trim(),
+    owner: form.owner.value.trim(),
+    status: form.status.value,
+    draftUrl: form.draftUrl.value.trim(),
+    approval: form.approval.value,
+    feedback: form.feedback.value.trim(),
+    dueDate: form.dueDate.value,
+    scheduleDate: form.scheduleDate.value,
+    uploadUrl: form.uploadUrl.value.trim(),
+    updatedAt: now,
+    updatedBy: settings.userName || current?.updatedBy || "",
+  };
+
+  await updateItem(item);
+  els.itemDialog.close();
+}
+
+async function updateItem(item) {
+  setSaveState("저장 중");
+
+  try {
+    if (hasApiSettings()) {
+      await requestApi("upsert", { item });
+    }
+
+    const index = items.findIndex((row) => row.id === item.id);
+    if (index >= 0) {
+      items[index] = normalizeItem(item);
+    } else {
+      items.unshift(normalizeItem(item));
+    }
+    persistLocalFallback();
+    setSaveState("저장됨");
+  } catch (error) {
+    console.error(error);
+    setSaveState("저장 실패");
+    alert("저장에 실패했습니다. 설정의 API URL과 비밀번호를 확인해 주세요.");
+  }
+
+  render();
+}
+
+async function deleteCurrentItem() {
+  const id = form.id.value;
+  if (!id) return;
+  if (!confirm("이 콘텐츠를 삭제할까요?")) return;
+
+  setSaveState("삭제 중");
+
+  try {
+    if (hasApiSettings()) {
+      await requestApi("delete", { id });
+    }
+    items = items.filter((item) => item.id !== id);
+    persistLocalFallback();
+    setSaveState("삭제됨");
+    els.itemDialog.close();
+  } catch (error) {
+    console.error(error);
+    setSaveState("삭제 실패");
+    alert("삭제에 실패했습니다. 설정의 API URL과 비밀번호를 확인해 주세요.");
+  }
+
+  render();
+}
+
+async function requestApi(action, payload = {}) {
+  const response = await fetch(settings.apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
+    body: JSON.stringify({
+      action,
+      secret: settings.apiSecret,
+      userName: settings.userName || "",
+      ...payload,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data.ok) {
+    throw new Error(data.error || "Unknown API error");
+  }
+  return data;
+}
+
+function openSettings() {
+  els.apiUrlInput.value = settings.apiUrl || "";
+  els.apiSecretInput.value = settings.apiSecret || "";
+  els.userNameInput.value = settings.userName || "";
+  els.settingsDialog.showModal();
+}
+
+async function saveSettingsFromDialog() {
+  settings = {
+    apiUrl: els.apiUrlInput.value.trim(),
+    apiSecret: els.apiSecretInput.value.trim(),
+    userName: els.userNameInput.value.trim(),
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  els.settingsDialog.close();
+  await loadItems();
+}
+
+function clearSettings() {
+  if (!confirm("연결 설정을 지울까요? 샘플 화면으로 돌아갑니다.")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  settings = loadSettings();
+  els.settingsDialog.close();
+  loadItems();
+}
+
+function loadSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function hasApiSettings() {
+  return Boolean(settings.apiUrl && settings.apiSecret);
+}
+
+function persistLocalFallback() {
+  localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(items));
+}
+
+function getFilteredItems() {
+  return items
+    .filter((item) => {
+      if (activeFilter === "approval") return item.status === "컨펌요청";
+      if (activeFilter === "revision") return item.status === "수정요청" || item.approval === "수정요청";
+      if (activeFilter === "week") return isThisWeek(item.dueDate) || isThisWeek(item.scheduleDate);
+      if (activeFilter === "done") return item.status === "업로드완료";
+      return true;
+    })
+    .filter((item) => {
+      if (!searchQuery) return true;
+      const haystack = [
+        item.title,
+        item.sourceUrl,
+        item.platform,
+        item.reference,
+        item.owner,
+        item.status,
+        item.approval,
+        item.feedback,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(searchQuery);
+    })
+    .sort((a, b) => {
+      const priority = {
+        "컨펌요청": 1,
+        "수정요청": 2,
+        "제작중": 3,
+        "제작대기": 4,
+        "아이디어": 5,
+        "승인": 6,
+        "예약완료": 7,
+        "업로드완료": 8,
+      };
+      const aPriority = priority[a.status] || 9;
+      const bPriority = priority[b.status] || 9;
+      if (aPriority !== bPriority) return aPriority - bPriority;
+
+      const aKey = a.dueDate || "9999-12-31";
+      const bKey = b.dueDate || "9999-12-31";
+      return aKey.localeCompare(bKey);
+    });
+}
+
+function getCaption(count) {
+  const label = {
+    all: "전체 콘텐츠",
+    approval: "컨펌 대기 콘텐츠",
+    revision: "수정 요청 콘텐츠",
+    week: "이번 주 일정",
+    done: "업로드 완료 콘텐츠",
+  }[activeFilter];
+  return `${label} ${count}개를 표시합니다.`;
+}
+
+function normalizeItems(rows) {
+  return rows.map(normalizeItem);
+}
+
+function normalizeItem(row) {
+  return {
+    id: String(row.id || createId()),
+    title: row.title || "",
+    sourceUrl: row.sourceUrl || "",
+    thumbnail: row.thumbnail || "",
+    platform: row.platform || inferPlatform(row.sourceUrl),
+    reference: row.reference || "",
+    owner: row.owner || "",
+    status: row.status || "아이디어",
+    draftUrl: row.draftUrl || "",
+    approval: row.approval || "미확인",
+    feedback: row.feedback || "",
+    dueDate: normalizeDateInput(row.dueDate),
+    scheduleDate: normalizeDateInput(row.scheduleDate),
+    uploadUrl: row.uploadUrl || "",
+    updatedAt: row.updatedAt || "",
+    updatedBy: row.updatedBy || "",
+  };
+}
+
+function createId() {
+  return `meme_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function renderThumb(item) {
+  const imageUrl = item.thumbnail || youtubeThumbnail(item.sourceUrl);
+  if (imageUrl) {
+    return `<span class="thumb"><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.textContent='${escapeAttr(platformInitial(item.platform))}'"></span>`;
+  }
+  return `<span class="thumb">${escapeHtml(platformInitial(item.platform))}</span>`;
+}
+
+function renderPlatform(platform) {
+  return `<span class="pill">${escapeHtml(platform || "기타")}</span>`;
+}
+
+function renderStatus(status) {
+  const className = STATUS_CLASS[status] || "status-idea";
+  return `<span class="status-badge ${className}">${escapeHtml(status || "아이디어")}</span>`;
+}
+
+function renderApproval(approval) {
+  const label = approval || "미확인";
+  const className = APPROVAL_CLASS[label] || "approval-pending";
+  return `<span class="approval-badge ${className}">${escapeHtml(label)}</span>`;
+}
+
+function renderDueDate(date) {
+  const className = isOverdue(date) ? "date-text is-overdue" : "date-text";
+  return `<span class="${className}">${escapeHtml(formatDate(date))}</span>`;
+}
+
+function formatDate(date) {
+  if (!date) return "-";
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  }).format(parsed);
+}
+
+function normalizeDateInput(value) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function isToday(date) {
+  if (!date) return false;
+  return date === new Date().toISOString().slice(0, 10);
+}
+
+function isOverdue(date) {
+  if (!date) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(`${date}T00:00:00`);
+  return target < today;
+}
+
+function isThisWeek(date) {
+  if (!date) return false;
+  const target = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const end = new Date(today);
+  end.setDate(today.getDate() + 7);
+  return target >= today && target <= end;
+}
+
+function inferPlatform(url) {
+  const lower = String(url || "").toLowerCase();
+  if (lower.includes("youtube.com") || lower.includes("youtu.be")) return "유튜브";
+  if (lower.includes("instagram.com")) return "인스타";
+  if (lower.includes("tiktok.com")) return "틱톡";
+  return "기타";
+}
+
+function platformInitial(platform) {
+  if (platform === "유튜브") return "YT";
+  if (platform === "인스타") return "IN";
+  if (platform === "틱톡") return "TT";
+  return "URL";
+}
+
+function youtubeThumbnail(url) {
+  const value = String(url || "");
+  const patterns = [
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/,
+    /youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/,
+    /youtu\.be\/([a-zA-Z0-9_-]+)/,
+  ];
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+    if (match) return `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`;
+  }
+  return "";
+}
+
+function setSaveState(message) {
+  els.saveState.textContent = message;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replaceAll("`", "&#096;");
+}

@@ -1,0 +1,58 @@
+{
+  "items": [
+    {
+      "id": "sample_001",
+      "title": "퇴근 10분 전 공감 밈",
+      "sourceUrl": "https://www.youtube.com/shorts/dQw4w9WgXcQ",
+      "thumbnail": "",
+      "platform": "유튜브",
+      "reference": "첫 2초 훅과 자막 박자를 참고. 내용은 우리 업종에 맞게 바꾸기.",
+      "owner": "민수",
+      "status": "컨펌요청",
+      "draftUrl": "https://drive.google.com/",
+      "approval": "미확인",
+      "feedback": "",
+      "dueDate": "2026-06-15",
+      "scheduleDate": "2026-06-17",
+      "uploadUrl": "",
+      "updatedAt": "2026-06-15T08:00:00.000Z",
+      "updatedBy": "민수"
+    },
+    {
+      "id": "sample_002",
+      "title": "사장님 표정 리액션",
+      "sourceUrl": "https://www.instagram.com/reel/example/",
+      "thumbnail": "",
+      "platform": "인스타",
+      "reference": "리액션 컷 전환 속도만 참고. 말투는 더 단정하게.",
+      "owner": "지현",
+      "status": "수정요청",
+      "draftUrl": "https://drive.google.com/",
+      "approval": "수정요청",
+      "feedback": "마지막 문구가 너무 세서 부드럽게 바꿔주세요.",
+      "dueDate": "2026-06-18",
+      "scheduleDate": "",
+      "uploadUrl": "",
+      "updatedAt": "2026-06-15T08:00:00.000Z",
+      "updatedBy": "김대표"
+    },
+    {
+      "id": "sample_003",
+      "title": "주말 예약 안내 숏폼",
+      "sourceUrl": "https://www.tiktok.com/@example/video/1234567890",
+      "thumbnail": "",
+      "platform": "틱톡",
+      "reference": "화면 구성만 참고. CTA는 전화 예약으로 변경.",
+      "owner": "민수",
+      "status": "업로드완료",
+      "draftUrl": "https://drive.google.com/",
+      "approval": "승인",
+      "feedback": "",
+      "dueDate": "2026-06-14",
+      "scheduleDate": "2026-06-14",
+      "uploadUrl": "https://www.instagram.com/",
+      "updatedAt": "2026-06-15T08:00:00.000Z",
+      "updatedBy": "민수"
+    }
+  ]
+}

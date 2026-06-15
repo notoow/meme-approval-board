@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>밈 숏폼 제작 보드</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">밈 숏폼 제작 관리</p>
+          <h1>콘텐츠 컨펌 보드</h1>
+        </div>
+        <div class="topbar-actions">
+          <button class="ghost-button" id="refreshButton" type="button">새로고침</button>
+          <button class="ghost-button" id="settingsButton" type="button">설정</button>
+          <button class="primary-button" id="newItemButton" type="button">새 링크 추가</button>
+        </div>
+      </header>
+
+      <section class="notice" id="setupNotice" hidden>
+        <div>
+          <strong>샘플 화면으로 보는 중입니다.</strong>
+          <span>Google Apps Script API를 연결하면 Google Sheet와 바로 연동됩니다.</span>
+        </div>
+        <button class="secondary-button" id="openSetupButton" type="button">연결 설정</button>
+      </section>
+
+      <main>
+        <section class="summary-grid" aria-label="요약">
+          <article class="summary-box">
+            <span>컨펌 대기</span>
+            <strong id="pendingCount">0</strong>
+          </article>
+          <article class="summary-box">
+            <span>수정 요청</span>
+            <strong id="revisionCount">0</strong>
+          </article>
+          <article class="summary-box">
+            <span>오늘 마감</span>
+            <strong id="dueTodayCount">0</strong>
+          </article>
+          <article class="summary-box">
+            <span>업로드 완료</span>
+            <strong id="doneCount">0</strong>
+          </article>
+        </section>
+
+        <section class="toolbar" aria-label="목록 필터">
+          <div class="filter-tabs" id="filterTabs">
+            <button class="tab-button is-active" type="button" data-filter="all">전체</button>
+            <button class="tab-button" type="button" data-filter="approval">컨펌 대기</button>
+            <button class="tab-button" type="button" data-filter="revision">수정 요청</button>
+            <button class="tab-button" type="button" data-filter="week">이번 주</button>
+            <button class="tab-button" type="button" data-filter="done">완료</button>
+          </div>
+          <label class="search-box">
+            <span>검색</span>
+            <input id="searchInput" type="search" placeholder="제목, 담당자, 링크 검색" />
+          </label>
+        </section>
+
+        <section class="table-panel" aria-label="콘텐츠 목록">
+          <div class="table-head">
+            <div>
+              <h2>콘텐츠 목록</h2>
+              <p id="listCaption">전체 콘텐츠를 표시합니다.</p>
+            </div>
+            <div class="save-state" id="saveState" role="status">준비됨</div>
+          </div>
+
+          <div class="desktop-table-wrap">
+            <table class="content-table">
+              <thead>
+                <tr>
+                  <th>영상</th>
+                  <th>플랫폼</th>
+                  <th>상태</th>
+                  <th>담당</th>
+                  <th>마감</th>
+                  <th>컨펌</th>
+                  <th>작업</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="mobile-list" id="mobileList"></div>
+          <div class="empty-state" id="emptyState" hidden>
+            <strong>표시할 콘텐츠가 없습니다.</strong>
+            <span>필터를 바꾸거나 새 링크를 추가해 주세요.</span>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="modal" id="itemDialog">
+      <form method="dialog" class="modal-card" id="itemForm">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">콘텐츠 상세</p>
+            <h2 id="itemDialogTitle">새 링크 추가</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="닫기" type="submit">×</button>
+        </div>
+
+        <input id="itemId" type="hidden" />
+        <div class="form-grid">
+          <label class="field span-2">
+            <span>제목</span>
+            <input id="titleInput" name="title" required placeholder="예: 출근길 공감 밈" />
+          </label>
+          <label class="field span-2">
+            <span>원본 링크</span>
+            <input id="sourceUrlInput" name="sourceUrl" type="url" required placeholder="https://..." />
+          </label>
+          <label class="field">
+            <span>플랫폼</span>
+            <select id="platformInput" name="platform">
+              <option>인스타</option>
+              <option>유튜브</option>
+              <option>틱톡</option>
+              <option>기타</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>상태</span>
+            <select id="statusInput" name="status">
+              <option>아이디어</option>
+              <option>제작대기</option>
+              <option>제작중</option>
+              <option>컨펌요청</option>
+              <option>수정요청</option>
+              <option>승인</option>
+              <option>예약완료</option>
+              <option>업로드완료</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>담당자</span>
+            <input id="ownerInput" name="owner" placeholder="이름" />
+          </label>
+          <label class="field">
+            <span>마감일</span>
+            <input id="dueDateInput" name="dueDate" type="date" />
+          </label>
+          <label class="field span-2">
+            <span>참고 포인트</span>
+            <textarea id="referenceInput" name="reference" rows="3" placeholder="훅, 자막톤, 편집감, 사운드 등"></textarea>
+          </label>
+          <label class="field span-2">
+            <span>초안 영상 링크</span>
+            <input id="draftUrlInput" name="draftUrl" type="url" placeholder="https://..." />
+          </label>
+          <label class="field">
+            <span>컨펌 상태</span>
+            <select id="approvalInput" name="approval">
+              <option>미확인</option>
+              <option>승인</option>
+              <option>수정요청</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>예약일</span>
+            <input id="scheduleDateInput" name="scheduleDate" type="date" />
+          </label>
+          <label class="field span-2">
+            <span>수정 요청 메모</span>
+            <textarea id="feedbackInput" name="feedback" rows="3" placeholder="수정할 내용을 적어주세요."></textarea>
+          </label>
+          <label class="field span-2">
+            <span>업로드 링크</span>
+            <input id="uploadUrlInput" name="uploadUrl" type="url" placeholder="https://..." />
+          </label>
+          <label class="field span-2">
+            <span>썸네일 이미지 링크</span>
+            <input id="thumbnailInput" name="thumbnail" type="url" placeholder="없으면 비워도 됩니다." />
+          </label>
+        </div>
+
+        <div class="modal-actions">
+          <button class="danger-button" id="deleteButton" type="button">삭제</button>
+          <span></span>
+          <button class="secondary-button" value="cancel" type="submit">취소</button>
+          <button class="primary-button" id="saveItemButton" type="button">저장</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="settingsDialog">
+      <form method="dialog" class="modal-card">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Google Sheets 연결</p>
+            <h2>설정</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="닫기" type="submit">×</button>
+        </div>
+
+        <div class="settings-copy">
+          <p>Apps Script 배포 URL과 비밀번호를 입력하면 이 브라우저에서 저장됩니다.</p>
+          <p>비밀번호는 repo에 저장되지 않고, 각 사용자 브라우저에만 저장됩니다.</p>
+        </div>
+
+        <div class="form-grid">
+          <label class="field span-2">
+            <span>Apps Script 웹앱 URL</span>
+            <input id="apiUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+          </label>
+          <label class="field">
+            <span>접속 비밀번호</span>
+            <input id="apiSecretInput" type="password" placeholder="설정한 비밀번호" />
+          </label>
+          <label class="field">
+            <span>내 이름</span>
+            <input id="userNameInput" placeholder="예: 김대표" />
+          </label>
+        </div>
+
+        <div class="modal-actions">
+          <button class="danger-button" id="clearSettingsButton" type="button">연결 해제</button>
+          <span></span>
+          <button class="secondary-button" value="cancel" type="submit">닫기</button>
+          <button class="primary-button" id="saveSettingsButton" type="button">저장 후 불러오기</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
