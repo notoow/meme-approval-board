@@ -459,16 +459,26 @@ h2 {
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  color: #ffffff;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  color: var(--slate);
   font-weight: 900;
   line-height: 1;
   text-decoration: none;
 }
 
+.platform-mark img,
+.title-platform img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
 .platform-mark {
-  min-width: 34px;
-  height: 26px;
-  padding: 0 8px;
+  width: 42px;
+  height: 28px;
+  padding: 4px;
   font-size: 13px;
 }
 
@@ -481,30 +491,33 @@ h2 {
 
 .thumb-fallback .platform-mark {
   position: static;
-  min-width: 50px;
-  height: 38px;
+  width: 72px;
+  height: 48px;
+  padding: 6px;
   font-size: 17px;
   box-shadow: none;
 }
 
 .title-platform {
   flex: 0 0 auto;
-  min-width: 28px;
-  height: 22px;
-  padding: 0 6px;
+  width: 30px;
+  height: 24px;
+  padding: 3px;
   font-size: 11px;
 }
 
-.platform-youtube {
-  background: #d72626;
+.title-platform.platform-youtube {
+  width: 44px;
 }
 
-.platform-instagram {
-  background: #c13584;
+.title-platform.platform-instagram,
+.title-platform.platform-tiktok {
+  width: 26px;
 }
 
-.platform-tiktok {
-  background: #111827;
+.platform-mark.platform-instagram,
+.platform-mark.platform-tiktok {
+  width: 34px;
 }
 
 .platform-etc {

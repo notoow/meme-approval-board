@@ -19,6 +19,12 @@ const APPROVAL_CLASS = {
   "수정요청": "approval-revision",
 };
 
+const PLATFORM_LOGOS = {
+  "유튜브": "./assets/platforms/youtube.png",
+  "인스타": "./assets/platforms/instagram.png",
+  "틱톡": "./assets/platforms/tiktok.png",
+};
+
 let items = [];
 let activeFilter = "all";
 let searchQuery = "";
@@ -879,7 +885,7 @@ function renderPlatformMark(platform) {
     "인스타": "platform-instagram",
     "틱톡": "platform-tiktok",
   }[normalized] || "platform-etc";
-  return `<span class="platform-mark ${className}">${escapeHtml(platformInitial(normalized))}</span>`;
+  return renderPlatformLogo(normalized, `platform-mark ${className}`);
 }
 
 function renderTitlePlatform(platform) {
@@ -889,7 +895,15 @@ function renderTitlePlatform(platform) {
     "인스타": "platform-instagram",
     "틱톡": "platform-tiktok",
   }[normalized] || "platform-etc";
-  return `<span class="title-platform ${className}">${escapeHtml(platformInitial(normalized))}</span>`;
+  return renderPlatformLogo(normalized, `title-platform ${className}`);
+}
+
+function renderPlatformLogo(platform, className) {
+  const logo = PLATFORM_LOGOS[platform];
+  if (!logo) {
+    return `<span class="${className}">URL</span>`;
+  }
+  return `<span class="${className}"><img src="${escapeAttr(logo)}" alt="${escapeAttr(platform)}" loading="lazy" /></span>`;
 }
 
 function renderStatus(status) {
@@ -968,13 +982,6 @@ function canonicalizeSourceUrl(url) {
   normalized = normalized.replace("instagram.com/reels/", "instagram.com/reel/");
   normalized = normalized.replace("www.instagram.com/reels/", "www.instagram.com/reel/");
   return normalized;
-}
-
-function platformInitial(platform) {
-  if (platform === "유튜브") return "YT";
-  if (platform === "인스타") return "IN";
-  if (platform === "틱톡") return "TT";
-  return "URL";
 }
 
 function youtubeThumbnail(url) {
