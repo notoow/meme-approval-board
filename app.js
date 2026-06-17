@@ -2,14 +2,15 @@ const STORAGE_KEY = "meme-board-settings";
 const LOCAL_DATA_KEY = "meme-board-local-data";
 
 const STATUS_CLASS = {
-  "아이디어": "status-idea",
-  "제작대기": "status-wait",
-  "제작중": "status-working",
-  "컨펌요청": "status-approval",
-  "수정요청": "status-revision",
-  "승인": "status-approved",
-  "예약완료": "status-scheduled",
+  "촬영필요": "status-wait",
+  "촬영완료": "status-shot",
+  "작업중": "status-working",
+  "작업완료": "status-work-done",
+  "컨펌대기": "status-approval",
+  "수정중": "status-revision",
+  "수정완료": "status-approved",
   "업로드완료": "status-done",
+  "보류": "status-hold",
 };
 
 const APPROVAL_CLASS = {
@@ -215,9 +216,9 @@ function render() {
 }
 
 function renderSummary() {
-  els.pendingCount.textContent = items.filter((item) => item.status === "컨펌요청").length;
-  els.revisionCount.textContent = items.filter((item) => item.status === "수정요청" || item.approval === "수정요청").length;
-  els.dueTodayCount.textContent = items.filter((item) => isToday(item.dueDate) && item.status !== "업로드완료").length;
+  els.pendingCount.textContent = items.filter((item) => item.status === "컨펌대기").length;
+  els.revisionCount.textContent = items.filter((item) => item.status === "수정중" || item.approval === "수정요청").length;
+  els.dueTodayCount.textContent = items.filter((item) => isToday(item.dueDate) && item.status !== "업로드완료" && item.status !== "보류").length;
   els.doneCount.textContent = items.filter((item) => item.status === "업로드완료").length;
 }
 
@@ -295,12 +296,13 @@ function handleListAction(event) {
   }
 
   if (button.dataset.action === "approve") {
-    updateItem({ ...item, approval: "승인", status: item.status === "업로드완료" ? item.status : "승인" });
+    const nextStatus = item.status === "업로드완료" || item.status === "보류" ? item.status : "수정완료";
+    updateItem({ ...item, approval: "승인", status: nextStatus });
     return;
   }
 
   if (button.dataset.action === "revise") {
-    openItemDialog({ ...item, approval: "수정요청", status: "수정요청" });
+    openItemDialog({ ...item, approval: "수정요청", status: "수정중" });
   }
 }
 
@@ -317,7 +319,7 @@ function openItemDialog(item = null) {
     platform: "인스타",
     reference: "",
     owner: settings.userName || "",
-    status: "아이디어",
+    status: "촬영필요",
     draftUrl: "",
     approval: "미확인",
     feedback: "",
@@ -333,7 +335,7 @@ function openItemDialog(item = null) {
   form.platform.value = data.platform || "인스타";
   form.reference.value = data.reference || "";
   form.owner.value = data.owner || "";
-  form.status.value = data.status || "아이디어";
+  form.status.value = normalizeStatus(data.status);
   form.draftUrl.value = data.draftUrl || "";
   form.approval.value = data.approval || "미확인";
   form.feedback.value = data.feedback || "";
@@ -570,8 +572,8 @@ function persistLocalFallback() {
 function getFilteredItems() {
   return items
     .filter((item) => {
-      if (activeFilter === "approval") return item.status === "컨펌요청";
-      if (activeFilter === "revision") return item.status === "수정요청" || item.approval === "수정요청";
+      if (activeFilter === "approval") return item.status === "컨펌대기";
+      if (activeFilter === "revision") return item.status === "수정중" || item.approval === "수정요청";
       if (activeFilter === "week") return isThisWeek(item.dueDate) || isThisWeek(item.scheduleDate);
       if (activeFilter === "done") return item.status === "업로드완료";
       return true;
@@ -594,14 +596,15 @@ function getFilteredItems() {
     })
     .sort((a, b) => {
       const priority = {
-        "컨펌요청": 1,
-        "수정요청": 2,
-        "제작중": 3,
-        "제작대기": 4,
-        "아이디어": 5,
-        "승인": 6,
-        "예약완료": 7,
+        "컨펌대기": 1,
+        "수정중": 2,
+        "작업중": 3,
+        "작업완료": 4,
+        "수정완료": 5,
+        "촬영완료": 6,
+        "촬영필요": 7,
         "업로드완료": 8,
+        "보류": 99,
       };
       const aPriority = priority[a.status] || 9;
       const bPriority = priority[b.status] || 9;
@@ -628,6 +631,23 @@ function normalizeItems(rows) {
   return rows.map(normalizeItem);
 }
 
+function normalizeStatus(status) {
+  const value = String(status || "").trim();
+  const legacyStatus = {
+    "": "촬영필요",
+    "아이디어": "촬영필요",
+    "제작대기": "촬영필요",
+    "미촬영": "촬영필요",
+    "제작중": "작업중",
+    "컨펌요청": "컨펌대기",
+    "수정요청": "수정중",
+    "승인": "수정완료",
+    "예약완료": "수정완료",
+  };
+  const normalized = legacyStatus[value] || value;
+  return STATUS_CLASS[normalized] ? normalized : "촬영필요";
+}
+
 function normalizeItem(row) {
   return {
     id: String(row.id || createId()),
@@ -637,7 +657,7 @@ function normalizeItem(row) {
     platform: row.platform || inferPlatform(row.sourceUrl),
     reference: row.reference || "",
     owner: row.owner || "",
-    status: row.status || "아이디어",
+    status: normalizeStatus(row.status),
     draftUrl: row.draftUrl || "",
     approval: row.approval || "미확인",
     feedback: row.feedback || "",
@@ -663,7 +683,7 @@ function createQuickItem(url, reference, index, total) {
     platform,
     reference: reference || "링크 자동 등록",
     owner: settings.userName || "",
-    status: "제작대기",
+    status: "촬영필요",
     draftUrl: "",
     approval: "미확인",
     feedback: "",
@@ -738,8 +758,9 @@ function renderPlatform(platform) {
 }
 
 function renderStatus(status) {
-  const className = STATUS_CLASS[status] || "status-idea";
-  return `<span class="status-badge ${className}">${escapeHtml(status || "아이디어")}</span>`;
+  const label = normalizeStatus(status);
+  const className = STATUS_CLASS[label] || "status-wait";
+  return `<span class="status-badge ${className}">${escapeHtml(label)}</span>`;
 }
 
 function renderApproval(approval) {

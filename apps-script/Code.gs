@@ -10,7 +10,7 @@ const COLUMNS = [
   ["platform", "플랫폼"],
   ["reference", "참고 포인트"],
   ["owner", "담당자"],
-  ["status", "상태"],
+  ["status", "단계"],
   ["draftUrl", "초안 링크"],
   ["approval", "컨펌"],
   ["feedback", "수정 요청"],
@@ -20,6 +20,10 @@ const COLUMNS = [
   ["updatedAt", "최종 수정일"],
   ["updatedBy", "최종 수정자"],
 ];
+
+const HEADER_ALIASES = {
+  "단계": ["상태"],
+};
 
 function doPost(e) {
   try {
@@ -180,7 +184,8 @@ function getSheet() {
 
 function ensureHeaders(sheet) {
   const headers = COLUMNS.map((column) => column[1]);
-  const current = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
+  const lastColumn = Math.max(sheet.getLastColumn(), headers.length);
+  const current = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
   const isEmpty = current.every((value) => value === "");
 
   if (isEmpty) {
@@ -191,6 +196,11 @@ function ensureHeaders(sheet) {
   headers.forEach((header) => {
     const values = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     if (values.indexOf(header) === -1) {
+      const alias = (HEADER_ALIASES[header] || []).find((name) => values.indexOf(name) !== -1);
+      if (alias) {
+        sheet.getRange(1, values.indexOf(alias) + 1).setValue(header);
+        return;
+      }
       sheet.getRange(1, sheet.getLastColumn() + 1).setValue(header);
     }
   });
@@ -199,7 +209,7 @@ function ensureHeaders(sheet) {
 function rowToItem(headers, row) {
   const item = {};
   COLUMNS.forEach(([key, header]) => {
-    const index = headers.indexOf(header);
+    const index = findHeaderIndex(headers, header);
     item[key] = index >= 0 ? formatCellValue(row[index]) : "";
   });
   return item;
@@ -207,7 +217,7 @@ function rowToItem(headers, row) {
 
 function itemToRow(headers, item) {
   return headers.map((header) => {
-    const column = COLUMNS.find((entry) => entry[1] === header);
+    const column = COLUMNS.find((entry) => entry[1] === header || (HEADER_ALIASES[entry[1]] || []).indexOf(header) !== -1);
     if (!column) return "";
     return item[column[0]] || "";
   });
@@ -221,7 +231,38 @@ function normalizeItem(item, userName) {
 
   normalized.updatedAt = new Date().toISOString();
   normalized.updatedBy = userName || item.updatedBy || "";
+  normalized.status = normalizeStatus(normalized.status);
   return normalized;
+}
+
+function normalizeStatus(status) {
+  const value = String(status || "").trim();
+  const legacyStatus = {
+    "": "촬영필요",
+    "아이디어": "촬영필요",
+    "제작대기": "촬영필요",
+    "미촬영": "촬영필요",
+    "제작중": "작업중",
+    "컨펌요청": "컨펌대기",
+    "수정요청": "수정중",
+    "승인": "수정완료",
+    "예약완료": "수정완료",
+  };
+  const valid = ["촬영필요", "촬영완료", "작업중", "작업완료", "컨펌대기", "수정중", "수정완료", "업로드완료", "보류"];
+  const normalized = legacyStatus[value] || value;
+  return valid.indexOf(normalized) === -1 ? "촬영필요" : normalized;
+}
+
+function findHeaderIndex(headers, header) {
+  const index = headers.indexOf(header);
+  if (index >= 0) return index;
+
+  const aliases = HEADER_ALIASES[header] || [];
+  for (let aliasIndex = 0; aliasIndex < aliases.length; aliasIndex += 1) {
+    const currentIndex = headers.indexOf(aliases[aliasIndex]);
+    if (currentIndex >= 0) return currentIndex;
+  }
+  return -1;
 }
 
 function findRowIndexById(values, idColumn, id) {

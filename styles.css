@@ -446,17 +446,19 @@ h2 {
   color: var(--slate);
 }
 
-.status-idea,
-.status-wait {
+.status-wait,
+.status-hold {
   background: var(--soft);
   color: var(--slate);
 }
 
+.status-shot,
 .status-working {
   background: var(--blue-soft);
   color: #174ea6;
 }
 
+.status-work-done,
 .status-approval,
 .approval-pending {
   background: var(--yellow-soft);
@@ -470,7 +472,6 @@ h2 {
 }
 
 .status-approved,
-.status-scheduled,
 .status-done,
 .approval-approved {
   background: var(--green-soft);
