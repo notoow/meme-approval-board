@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>밈 숏폼 제작 보드</title>
-    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-7" />
-    <link rel="stylesheet" href="./styles.css?v=20260617-7" />
+    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-8" />
+    <link rel="stylesheet" href="./styles.css?v=20260617-8" />
   </head>
   <body>
     <div class="app-shell">
@@ -33,21 +33,11 @@
         <section class="quick-add" aria-label="빠른 링크 등록">
           <div class="quick-add-copy">
             <p class="eyebrow">빠른 등록</p>
-            <h2>제목과 링크를 하나씩 등록합니다</h2>
+            <h2>제목, 링크, 설명을 묶어서 등록합니다</h2>
           </div>
           <form class="quick-add-form" id="quickAddForm">
-            <label class="quick-note-box">
-              <span>제작 제목</span>
-              <input id="quickTitleInput" required placeholder="예: 무영등 트랜지션" />
-            </label>
-            <label class="quick-link-box">
-              <span>인스타, 유튜브, 틱톡 링크</span>
-              <input id="quickLinkInput" type="url" required placeholder="https://www.instagram.com/reel/..." />
-            </label>
-            <label class="quick-note-box">
-              <span>설명</span>
-              <input id="quickReferenceInput" placeholder="예: 이런 느낌으로 제작" />
-            </label>
+            <div class="quick-items" id="quickItems"></div>
+            <button class="add-quick-item" id="addQuickItemButton" type="button">+ 입력 추가</button>
             <div class="quick-add-actions">
               <div class="quick-status" id="quickStatus" role="status">제목과 링크 입력 대기 중</div>
               <button class="primary-button" id="quickAddButton" type="submit">시트에 등록</button>
@@ -260,6 +250,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260617-7"></script>
+    <script src="./app.js?v=20260617-8"></script>
   </body>
 </html>

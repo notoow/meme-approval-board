@@ -190,6 +190,42 @@ h2 {
   gap: 12px;
 }
 
+.quick-items {
+  display: grid;
+  gap: 10px;
+}
+
+.quick-entry {
+  display: grid;
+  grid-template-columns: 34px minmax(160px, 1fr) minmax(220px, 1.35fr) minmax(160px, 1fr) 44px;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.quick-entry-number {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 48px;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.quick-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.quick-field span {
+  color: var(--slate);
+  font-weight: 900;
+}
+
 .quick-link-box,
 .quick-note-box {
   display: grid;
@@ -202,6 +238,7 @@ h2 {
   font-weight: 900;
 }
 
+.quick-field input,
 .quick-link-box input,
 .quick-note-box input {
   width: 100%;
@@ -212,16 +249,43 @@ h2 {
   outline: 0;
 }
 
+.quick-field input,
 .quick-link-box input,
 .quick-note-box input {
   height: 48px;
   padding: 0 14px;
 }
 
+.quick-field input:focus,
 .quick-link-box input:focus,
 .quick-note-box input:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(36, 99, 235, 0.12);
+}
+
+.quick-remove-button {
+  width: 44px;
+  height: 48px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.quick-remove-button:hover {
+  border-color: #ffc5bd;
+  color: var(--red);
+}
+
+.add-quick-item {
+  min-height: 44px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--slate);
+  font-weight: 900;
 }
 
 .quick-add-actions {
@@ -888,6 +952,28 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .quick-entry {
+    grid-template-columns: 1fr auto;
+    align-items: start;
+  }
+
+  .quick-entry-number {
+    width: auto;
+    height: 32px;
+    justify-content: start;
+  }
+
+  .quick-field {
+    grid-column: 1 / -1;
+  }
+
+  .quick-remove-button {
+    grid-column: 2;
+    grid-row: 1;
+    width: 40px;
+    height: 40px;
+  }
+
   .span-2 {
     grid-column: span 1;
   }
@@ -946,5 +1032,9 @@ h2 {
 
   .row-button {
     padding: 0 8px;
+  }
+
+  .quick-entry {
+    padding: 10px;
   }
 }

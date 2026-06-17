@@ -55,9 +55,8 @@ const els = {
   shareLinkStatus: document.querySelector("#shareLinkStatus"),
   deleteButton: document.querySelector("#deleteButton"),
   quickAddForm: document.querySelector("#quickAddForm"),
-  quickLinkInput: document.querySelector("#quickLinkInput"),
-  quickTitleInput: document.querySelector("#quickTitleInput"),
-  quickReferenceInput: document.querySelector("#quickReferenceInput"),
+  quickItems: document.querySelector("#quickItems"),
+  addQuickItemButton: document.querySelector("#addQuickItemButton"),
   quickStatus: document.querySelector("#quickStatus"),
   quickAddButton: document.querySelector("#quickAddButton"),
 };
@@ -89,7 +88,10 @@ document.querySelector("#saveSettingsButton").addEventListener("click", saveSett
 document.querySelector("#clearSettingsButton").addEventListener("click", clearSettings);
 els.createShareLinkButton.addEventListener("click", createSettingsShareLink);
 els.quickAddForm.addEventListener("submit", submitQuickLinks);
-els.quickLinkInput.addEventListener("paste", preventMultipleLinkPaste);
+els.addQuickItemButton.addEventListener("click", addQuickEntryFromButton);
+els.quickItems.addEventListener("input", handleQuickEntryInput);
+els.quickItems.addEventListener("click", handleQuickEntryClick);
+els.quickItems.addEventListener("paste", preventMultipleLinkPaste);
 
 els.filterTabs.addEventListener("click", (event) => {
   const button = event.target.closest("[data-filter]");
@@ -109,6 +111,7 @@ els.searchInput.addEventListener("input", (event) => {
 els.tableBody.addEventListener("click", handleListAction);
 els.mobileList.addEventListener("click", handleListAction);
 
+initializeQuickEntries();
 loadItems();
 
 async function loadItems() {
@@ -150,24 +153,32 @@ async function submitQuickLinks(event = {}) {
   event.preventDefault?.();
   if (quickSaving) return;
 
-  const title = els.quickTitleInput.value.trim();
-  const urls = extractUrls(els.quickLinkInput.value);
+  const entries = collectQuickEntries();
 
-  if (!title) {
-    setQuickStatus("제작 제목을 입력해 주세요");
-    els.quickTitleInput.focus();
+  if (entries.length === 0) {
+    setQuickStatus("등록할 제목과 링크를 입력해 주세요");
+    focusQuickField(getQuickRows()[0], "title");
     return;
   }
 
-  if (urls.length === 0) {
-    setQuickStatus("등록할 링크가 없습니다");
-    els.quickLinkInput.focus();
-    return;
-  }
+  for (const entry of entries) {
+    if (!entry.title) {
+      setQuickStatus(`${entry.number}번 제작 제목을 입력해 주세요`);
+      focusQuickField(entry.row, "title");
+      return;
+    }
 
-  if (urls.length > 1) {
-    setQuickStatus("한 번에 링크 1개만 등록할 수 있습니다");
-    return;
+    if (entry.urls.length === 0) {
+      setQuickStatus(`${entry.number}번 링크를 입력해 주세요`);
+      focusQuickField(entry.row, "link");
+      return;
+    }
+
+    if (entry.urls.length > 1) {
+      setQuickStatus(`${entry.number}번에는 링크 1개만 넣어 주세요`);
+      focusQuickField(entry.row, "link");
+      return;
+    }
   }
 
   if (!hasApiSettings()) {
@@ -176,41 +187,167 @@ async function submitQuickLinks(event = {}) {
     return;
   }
 
-  const url = urls[0];
   const existingKeys = new Set(items.map((item) => normalizeUrlKey(item.sourceUrl)));
-  const key = normalizeUrlKey(url);
-  if (!key || existingKeys.has(key)) {
-    setQuickStatus("이미 등록된 링크입니다");
-    els.quickLinkInput.value = "";
-    return;
+  for (const entry of entries) {
+    const key = normalizeUrlKey(entry.urls[0]);
+    if (!key || existingKeys.has(key)) {
+      setQuickStatus(`${entry.number}번은 이미 등록된 링크입니다`);
+      focusQuickField(entry.row, "link");
+      return;
+    }
+    existingKeys.add(key);
   }
 
   quickSaving = true;
   els.quickAddButton.disabled = true;
-  setQuickStatus("등록 중");
+  setQuickStatus(`${entries.length}개 등록 중`);
 
-  const reference = els.quickReferenceInput.value.trim();
-  const item = await enrichItemMetadata(createQuickItem(url, title, reference));
-  const saved = await updateItem(item, { silent: true });
+  let addedCount = 0;
+  for (const entry of entries) {
+    const item = await enrichItemMetadata(createQuickItem(entry.urls[0], entry.title, entry.reference));
+    const saved = await updateItem(item, { silent: true });
+    if (!saved) break;
+    addedCount += 1;
+  }
 
   quickSaving = false;
   els.quickAddButton.disabled = false;
 
-  if (saved) {
-    els.quickLinkInput.value = "";
-    els.quickTitleInput.value = "";
-    els.quickReferenceInput.value = "";
-    setQuickStatus("시트에 등록되었습니다");
+  if (addedCount === entries.length) {
+    resetQuickEntries();
+    setQuickStatus(`${addedCount}개가 시트에 등록되었습니다`);
   } else {
-    setQuickStatus("등록에 실패했습니다");
+    setQuickStatus(`${addedCount}개 등록 후 중단되었습니다`);
   }
 }
 
 function preventMultipleLinkPaste(event) {
+  if (!event.target.closest('[data-field="link"]')) return;
   const text = event.clipboardData?.getData("text") || "";
   if (extractUrls(text).length <= 1) return;
   event.preventDefault();
-  setQuickStatus("한 번에 링크 1개만 붙여넣을 수 있습니다");
+  setQuickStatus("한 칸에는 링크 1개만 붙여넣을 수 있습니다");
+}
+
+function initializeQuickEntries() {
+  els.quickItems.innerHTML = "";
+  appendQuickEntry();
+}
+
+function resetQuickEntries() {
+  initializeQuickEntries();
+}
+
+function handleQuickEntryInput() {
+  ensureTrailingQuickEntry();
+}
+
+function handleQuickEntryClick(event) {
+  const button = event.target.closest("[data-quick-action]");
+  if (!button) return;
+
+  if (button.dataset.quickAction === "remove") {
+    const row = button.closest(".quick-entry");
+    row?.remove();
+    if (getQuickRows().length === 0) {
+      appendQuickEntry();
+    }
+    ensureTrailingQuickEntry();
+    renumberQuickEntries();
+  }
+}
+
+function addQuickEntryFromButton() {
+  const rows = getQuickRows();
+  const last = rows[rows.length - 1];
+  if (last && !hasQuickEntryValue(last)) {
+    focusQuickField(last, "title");
+    return;
+  }
+
+  const row = appendQuickEntry();
+  focusQuickField(row, "title");
+}
+
+function ensureTrailingQuickEntry() {
+  const rows = getQuickRows();
+  const last = rows[rows.length - 1];
+  if (!last || hasQuickEntryValue(last)) {
+    appendQuickEntry();
+  }
+  renumberQuickEntries();
+}
+
+function appendQuickEntry(values = {}) {
+  const row = document.createElement("div");
+  row.className = "quick-entry";
+  row.innerHTML = `
+    <div class="quick-entry-number" aria-hidden="true"></div>
+    <label class="quick-field">
+      <span>제작 제목</span>
+      <input data-field="title" placeholder="예: 무영등 트랜지션" value="${escapeAttr(values.title || "")}" />
+    </label>
+    <label class="quick-field">
+      <span>링크</span>
+      <input data-field="link" type="url" placeholder="https://www.instagram.com/reel/..." value="${escapeAttr(values.link || "")}" />
+    </label>
+    <label class="quick-field">
+      <span>설명</span>
+      <input data-field="reference" placeholder="예: 이런 느낌으로 제작" value="${escapeAttr(values.reference || "")}" />
+    </label>
+    <button class="quick-remove-button" data-quick-action="remove" type="button" aria-label="입력 줄 삭제">×</button>
+  `;
+  els.quickItems.appendChild(row);
+  renumberQuickEntries();
+  return row;
+}
+
+function renumberQuickEntries() {
+  const rows = getQuickRows();
+  rows.forEach((row, index) => {
+    row.querySelector(".quick-entry-number").textContent = index + 1;
+    const isTrailingEmpty = index === rows.length - 1 && !hasQuickEntryValue(row);
+    row.querySelector(".quick-remove-button").hidden = rows.length === 1 || isTrailingEmpty;
+  });
+}
+
+function getQuickRows() {
+  return Array.from(els.quickItems.querySelectorAll(".quick-entry"));
+}
+
+function getQuickEntryValues(row) {
+  return {
+    title: getQuickField(row, "title").value.trim(),
+    link: getQuickField(row, "link").value.trim(),
+    reference: getQuickField(row, "reference").value.trim(),
+  };
+}
+
+function getQuickField(row, field) {
+  return row.querySelector(`[data-field="${field}"]`);
+}
+
+function hasQuickEntryValue(row) {
+  const values = getQuickEntryValues(row);
+  return Boolean(values.title || values.link || values.reference);
+}
+
+function collectQuickEntries() {
+  return getQuickRows()
+    .map((row, index) => {
+      const values = getQuickEntryValues(row);
+      return {
+        ...values,
+        row,
+        number: index + 1,
+        urls: extractUrls(values.link),
+      };
+    })
+    .filter((entry) => entry.title || entry.link || entry.reference);
+}
+
+function focusQuickField(row, field) {
+  getQuickField(row, field)?.focus();
 }
 
 function render() {
@@ -851,7 +988,7 @@ function createQuickItem(url, title, reference) {
     sourceUrl,
     thumbnail: youtubeThumbnail(sourceUrl),
     platform,
-    reference: reference || "링크 자동 등록",
+    reference: reference || "",
     owner: settings.userName || "",
     status: "촬영필요",
     draftUrl: "",
