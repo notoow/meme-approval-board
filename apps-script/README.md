@@ -11,7 +11,7 @@
 
 GitHub Pages에서는 일반 `fetch`가 막히는 환경을 대비해 JSONP 방식도 같이 지원합니다. 같은 배포 URL을 그대로 쓰면 됩니다.
 
-빠른 등록 속도를 높이기 위해 `batchUpsert` 액션을 지원합니다. `apps-script/Code.gs`를 바꾼 뒤에는 Apps Script에서 저장하고 웹 앱 배포를 새 버전으로 다시 배포하세요.
+빠른 등록 속도를 높이기 위해 `batchUpsert` 액션을 지원합니다. 설정 창의 `연결 테스트`에서 일괄 저장 가능 여부를 확인할 수 있습니다. `apps-script/Code.gs`를 바꾼 뒤에는 Apps Script에서 저장하고 웹 앱 배포를 새 버전으로 다시 배포하세요.
 
 비밀번호 확인은 Apps Script 안에서 처리됩니다. GitHub Pages 코드에는 비밀번호가 저장되지 않습니다.
 

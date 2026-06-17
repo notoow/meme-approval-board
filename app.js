@@ -94,6 +94,7 @@ const els = {
   nasStreamUrlInput: document.querySelector("#nasStreamUrlInput"),
   apiSecretInput: document.querySelector("#apiSecretInput"),
   userNameInput: document.querySelector("#userNameInput"),
+  testConnectionButton: document.querySelector("#testConnectionButton"),
   createShareLinkButton: document.querySelector("#createShareLinkButton"),
   shareLinkStatus: document.querySelector("#shareLinkStatus"),
   deleteButton: document.querySelector("#deleteButton"),
@@ -157,6 +158,7 @@ els.playerVersionTabs.addEventListener("click", handlePlayerVersionClick);
 els.saveRevisionButton.addEventListener("click", saveRevisionRequestFromPlayer);
 document.querySelector("#saveSettingsButton").addEventListener("click", saveSettingsFromDialog);
 document.querySelector("#clearSettingsButton").addEventListener("click", clearSettings);
+els.testConnectionButton.addEventListener("click", testSettingsConnection);
 els.createShareLinkButton.addEventListener("click", createSettingsShareLink);
 els.quickAddForm.addEventListener("submit", submitQuickLinks);
 els.addQuickItemButton.addEventListener("click", addQuickEntryFromButton);
@@ -1014,17 +1016,17 @@ function setReferenceStatus(message) {
   els.referenceStatus.textContent = message;
 }
 
-async function requestApi(action, payload = {}) {
+async function requestApi(action, payload = {}, activeSettings = settings) {
   const requestPayload = {
     action,
-    secret: settings.apiSecret,
-    userName: settings.userName || "",
+    secret: activeSettings.apiSecret,
+    userName: activeSettings.userName || "",
     ...payload,
   };
 
   let response;
   try {
-    response = await fetch(settings.apiUrl, {
+    response = await fetch(activeSettings.apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "text/plain;charset=utf-8",
@@ -1032,18 +1034,18 @@ async function requestApi(action, payload = {}) {
       body: JSON.stringify(requestPayload),
     });
   } catch (error) {
-    return requestApiJsonp(requestPayload, error);
+    return requestApiJsonp(requestPayload, error, activeSettings.apiUrl);
   }
 
   if (!response.ok) {
-    return requestApiJsonp(requestPayload, new Error(`API request failed: ${response.status}`));
+    return requestApiJsonp(requestPayload, new Error(`API request failed: ${response.status}`), activeSettings.apiUrl);
   }
 
   let data;
   try {
     data = await response.json();
   } catch (error) {
-    return requestApiJsonp(requestPayload, error);
+    return requestApiJsonp(requestPayload, error, activeSettings.apiUrl);
   }
 
   if (!data.ok) {
@@ -1052,7 +1054,7 @@ async function requestApi(action, payload = {}) {
   return data;
 }
 
-function requestApiJsonp(payload, originalError) {
+function requestApiJsonp(payload, originalError, apiUrl = settings.apiUrl) {
   return new Promise((resolve, reject) => {
     const callbackName = `memeBoardJsonp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     const script = document.createElement("script");
@@ -1077,7 +1079,7 @@ function requestApiJsonp(payload, originalError) {
     };
 
     try {
-      const url = new URL(settings.apiUrl);
+      const url = new URL(apiUrl);
       url.searchParams.set("callback", callbackName);
       url.searchParams.set("payload", JSON.stringify(payload));
       script.src = url.toString();
@@ -1103,15 +1105,49 @@ function openSettings() {
 }
 
 async function saveSettingsFromDialog() {
-  settings = {
+  settings = readSettingsForm();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  els.settingsDialog.close();
+  await loadItems();
+}
+
+function readSettingsForm() {
+  return {
     apiUrl: els.apiUrlInput.value.trim(),
     nasStreamUrl: normalizeNasStreamUrl(els.nasStreamUrlInput.value.trim()),
     apiSecret: els.apiSecretInput.value.trim(),
     userName: els.userNameInput.value.trim(),
   };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  els.settingsDialog.close();
-  await loadItems();
+}
+
+async function testSettingsConnection() {
+  const testSettings = readSettingsForm();
+
+  if (!testSettings.apiUrl || !testSettings.apiSecret) {
+    els.shareLinkStatus.textContent = "URL과 비밀번호를 입력한 뒤 테스트해 주세요";
+    return;
+  }
+
+  els.testConnectionButton.disabled = true;
+  els.shareLinkStatus.textContent = "연결 확인 중";
+
+  try {
+    const ping = await requestApi("ping", {}, testSettings);
+    const countText = Number.isFinite(Number(ping.itemCount)) ? ` / 항목 ${Number(ping.itemCount)}개` : "";
+    const batchText = ping.features?.batchUpsert ? "일괄 저장 가능" : "일괄 저장 미확인";
+    els.shareLinkStatus.textContent = `연결 정상 / ${batchText}${countText}`;
+  } catch (error) {
+    try {
+      const response = await requestApi("list", {}, testSettings);
+      const count = Array.isArray(response.items) ? response.items.length : 0;
+      els.shareLinkStatus.textContent = `기본 연결 정상 / 일괄 저장은 Apps Script 새 배포 필요 / 항목 ${count}개`;
+    } catch (fallbackError) {
+      console.error(error, fallbackError);
+      els.shareLinkStatus.textContent = "연결 실패. URL, 비밀번호, 웹 앱 액세스 권한을 확인해 주세요";
+    }
+  } finally {
+    els.testConnectionButton.disabled = false;
+  }
 }
 
 async function createSettingsShareLink() {

@@ -54,6 +54,10 @@ function handleAction(input) {
     return { ok: true, items: listItems() };
   }
 
+  if (input.action === "ping") {
+    return getApiInfo();
+  }
+
   if (input.action === "upsert") {
     const item = upsertItem(input.item, input.userName);
     return { ok: true, item };
@@ -74,6 +78,21 @@ function handleAction(input) {
   }
 
   throw new Error("Unknown action: " + input.action);
+}
+
+function getApiInfo() {
+  const sheet = getSheet();
+  ensureHeaders(sheet);
+
+  return {
+    ok: true,
+    version: "20260617-19",
+    sheetName: sheet.getName(),
+    itemCount: Math.max(sheet.getLastRow() - 1, 0),
+    features: {
+      batchUpsert: true,
+    },
+  };
 }
 
 function setupSheet() {

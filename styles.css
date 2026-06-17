@@ -1267,7 +1267,7 @@ h2 {
 
 .settings-share {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto auto minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   margin-top: 14px;
@@ -1281,8 +1281,8 @@ h2 {
   overflow: hidden;
   color: var(--muted);
   font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .drawer-backdrop {
