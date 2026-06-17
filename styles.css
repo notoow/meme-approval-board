@@ -427,7 +427,7 @@ h2 {
 
 .content-table {
   width: 100%;
-  min-width: 1040px;
+  min-width: 1120px;
   border-collapse: collapse;
 }
 
@@ -666,7 +666,7 @@ h2 {
   display: flex;
   flex-wrap: nowrap;
   gap: 8px;
-  min-width: 310px;
+  min-width: 470px;
 }
 
 .row-button {
@@ -675,9 +675,22 @@ h2 {
   background: var(--panel);
   border-color: var(--line-strong);
   color: var(--slate);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.row-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .row-button.approve {
+  background: var(--green-soft);
+  border-color: #b8e2ca;
+  color: var(--green);
+}
+
+.row-button.upload {
   background: var(--green-soft);
   border-color: #b8e2ca;
   color: var(--green);
@@ -687,6 +700,12 @@ h2 {
   background: var(--red-soft);
   border-color: #ffc5bd;
   color: var(--red);
+}
+
+.row-button.edit {
+  background: #ffffff;
+  border-color: var(--line-strong);
+  color: var(--slate);
 }
 
 .row-button.play {
@@ -742,9 +761,18 @@ h2 {
 
 .mobile-actions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(122px, 1fr));
   gap: 8px;
   margin-top: 14px;
+}
+
+.mobile-actions .row-button {
+  min-height: 44px;
+  white-space: normal;
+}
+
+.mobile-actions .row-button.delete {
+  width: auto;
 }
 
 .empty-state {
@@ -780,6 +808,29 @@ h2 {
 
 .player-modal {
   width: min(980px, calc(100% - 24px));
+}
+
+.final-modal {
+  width: min(680px, calc(100% - 24px));
+}
+
+.final-upload-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 14px;
+  background: var(--soft);
+  border-radius: 8px;
+}
+
+.final-upload-summary strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.final-upload-summary span {
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .player-card {
@@ -907,6 +958,10 @@ h2 {
   display: grid;
   grid-template-columns: auto 1fr auto auto;
   margin-top: 20px;
+}
+
+.final-actions {
+  grid-template-columns: 1fr auto auto auto;
 }
 
 .settings-copy {
@@ -1081,7 +1136,7 @@ h2 {
   }
 
   .mobile-actions {
-    grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

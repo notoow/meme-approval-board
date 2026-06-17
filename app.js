@@ -53,6 +53,15 @@ const els = {
   playerBody: document.querySelector("#playerBody"),
   playerOpenLink: document.querySelector("#playerOpenLink"),
   closePlayerButton: document.querySelector("#closePlayerButton"),
+  finalDialog: document.querySelector("#finalDialog"),
+  finalForm: document.querySelector("#finalForm"),
+  finalItemId: document.querySelector("#finalItemId"),
+  finalItemTitle: document.querySelector("#finalItemTitle"),
+  finalUploadUrl: document.querySelector("#finalUploadUrlInput"),
+  closeFinalButton: document.querySelector("#closeFinalButton"),
+  cancelFinalButton: document.querySelector("#cancelFinalButton"),
+  saveFinalButton: document.querySelector("#saveFinalButton"),
+  saveFinalPreviewButton: document.querySelector("#saveFinalPreviewButton"),
   settingsDialog: document.querySelector("#settingsDialog"),
   apiUrlInput: document.querySelector("#apiUrlInput"),
   nasStreamUrlInput: document.querySelector("#nasStreamUrlInput"),
@@ -91,6 +100,14 @@ document.querySelector("#openSetupButton").addEventListener("click", openSetting
 document.querySelector("#refreshButton").addEventListener("click", loadItems);
 document.querySelector("#saveItemButton").addEventListener("click", saveItemFromForm);
 document.querySelector("#deleteButton").addEventListener("click", deleteCurrentItem);
+els.finalForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveFinalUploadFromForm({ preview: false });
+});
+els.closeFinalButton.addEventListener("click", closeFinalUploadDialog);
+els.cancelFinalButton.addEventListener("click", closeFinalUploadDialog);
+els.saveFinalButton.addEventListener("click", () => saveFinalUploadFromForm({ preview: false }));
+els.saveFinalPreviewButton.addEventListener("click", () => saveFinalUploadFromForm({ preview: true }));
 els.closePlayerButton.addEventListener("click", closePlayerDialog);
 els.playerDialog.addEventListener("close", clearPlayerDialog);
 els.playerBody.addEventListener("click", handlePlayerBodyClick);
@@ -415,13 +432,11 @@ function renderTable(rows) {
           <td>${renderStatus(item.status)}</td>
           <td><span class="date-text">${escapeHtml(item.owner || "-")}</span></td>
           <td>${renderUploadDate(item.scheduleDate)}</td>
-          <td>${renderApproval(item.approval)}</td>
           <td>
             <div class="row-actions">
-              <button class="row-button approve" type="button" data-action="approve" data-id="${escapeAttr(item.id)}">승인</button>
-              <button class="row-button revise" type="button" data-action="revise" data-id="${escapeAttr(item.id)}">수정</button>
-              ${renderPlayButton(item)}
-              <button class="row-button" type="button" data-action="edit" data-id="${escapeAttr(item.id)}">열기</button>
+              <button class="row-button upload" type="button" data-action="upload" data-id="${escapeAttr(item.id)}">완성본 업로드</button>
+              <button class="row-button edit" type="button" data-action="edit" data-id="${escapeAttr(item.id)}">내용 수정</button>
+              ${renderPreviewButton(item)}
               <button class="row-button delete" type="button" data-action="delete" data-id="${escapeAttr(item.id)}" aria-label="삭제" title="삭제">${renderTrashIcon()}</button>
             </div>
           </td>
@@ -442,16 +457,14 @@ function renderMobile(rows) {
               ${renderVideoInfo(item)}
               <div class="mobile-tags">
                 ${renderStatus(item.status)}
-                ${renderApproval(item.approval)}
               </div>
               <span class="date-text">담당 ${escapeHtml(item.owner || "-")} · 업로드 ${escapeHtml(formatShortDate(item.scheduleDate))}</span>
             </div>
           </div>
           <div class="mobile-actions">
-            <button class="row-button approve" type="button" data-action="approve" data-id="${escapeAttr(item.id)}">승인</button>
-            <button class="row-button revise" type="button" data-action="revise" data-id="${escapeAttr(item.id)}">수정</button>
-            ${renderPlayButton(item)}
-            <button class="row-button" type="button" data-action="edit" data-id="${escapeAttr(item.id)}">열기</button>
+            <button class="row-button upload" type="button" data-action="upload" data-id="${escapeAttr(item.id)}">완성본 업로드</button>
+            <button class="row-button edit" type="button" data-action="edit" data-id="${escapeAttr(item.id)}">내용 수정</button>
+            ${renderPreviewButton(item)}
             <button class="row-button delete" type="button" data-action="delete" data-id="${escapeAttr(item.id)}" aria-label="삭제" title="삭제">${renderTrashIcon()}</button>
           </div>
         </article>
@@ -472,6 +485,11 @@ function handleListAction(event) {
     return;
   }
 
+  if (button.dataset.action === "upload") {
+    openFinalUploadDialog(item);
+    return;
+  }
+
   if (button.dataset.action === "delete") {
     deleteItemById(item.id);
     return;
@@ -479,17 +497,6 @@ function handleListAction(event) {
 
   if (button.dataset.action === "play") {
     openPlayerDialog(item);
-    return;
-  }
-
-  if (button.dataset.action === "approve") {
-    const nextStatus = item.status === "업로드완료" || item.status === "보류" ? item.status : "수정완료";
-    updateItem({ ...item, approval: "승인", status: nextStatus });
-    return;
-  }
-
-  if (button.dataset.action === "revise") {
-    openItemDialog({ ...item, approval: "수정요청", status: "수정중" });
   }
 }
 
@@ -560,6 +567,60 @@ async function saveItemFromForm() {
 
   await updateItem(item);
   els.itemDialog.close();
+}
+
+function openFinalUploadDialog(item) {
+  els.finalItemId.value = item.id;
+  els.finalItemTitle.textContent = item.title || "제작 제목 없음";
+  els.finalUploadUrl.value = item.uploadUrl || "";
+  els.finalDialog.showModal();
+  window.setTimeout(() => {
+    els.finalUploadUrl.focus();
+    els.finalUploadUrl.select();
+  }, 0);
+}
+
+function closeFinalUploadDialog() {
+  els.finalDialog.close();
+}
+
+async function saveFinalUploadFromForm(options = {}) {
+  if (!els.finalForm.reportValidity()) return;
+
+  const id = els.finalItemId.value;
+  const current = items.find((item) => item.id === id);
+  if (!current) return;
+
+  els.saveFinalButton.disabled = true;
+  els.saveFinalPreviewButton.disabled = true;
+
+  const updated = {
+    ...current,
+    uploadUrl: els.finalUploadUrl.value.trim(),
+    status: statusAfterFinalUpload(current.status),
+    updatedAt: new Date().toISOString(),
+    updatedBy: settings.userName || current.updatedBy || "",
+  };
+
+  try {
+    const saved = await updateItem(updated);
+    if (!saved) return;
+
+    els.finalDialog.close();
+
+    if (options.preview) {
+      openPlayerDialog(items.find((item) => item.id === id) || updated);
+    }
+  } finally {
+    els.saveFinalButton.disabled = false;
+    els.saveFinalPreviewButton.disabled = false;
+  }
+}
+
+function statusAfterFinalUpload(status) {
+  const normalized = normalizeStatus(status);
+  const keepStatus = ["컨펌대기", "수정완료", "업로드완료", "보류"];
+  return keepStatus.includes(normalized) ? normalized : "작업완료";
 }
 
 async function updateItem(item, options = {}) {
@@ -1147,9 +1208,11 @@ function renderVideoInfo(item) {
   `;
 }
 
-function renderPlayButton(item) {
-  if (!getPlaybackLink(item)) return "";
-  return `<button class="row-button play" type="button" data-action="play" data-id="${escapeAttr(item.id)}">재생</button>`;
+function renderPreviewButton(item) {
+  if (!getPlaybackLink(item)) {
+    return `<button class="row-button play" type="button" disabled title="완성본 링크를 먼저 업로드해 주세요">완성본 미리보기</button>`;
+  }
+  return `<button class="row-button play" type="button" data-action="play" data-id="${escapeAttr(item.id)}">완성본 미리보기</button>`;
 }
 
 function openPlayerDialog(item) {
@@ -1188,7 +1251,7 @@ function handlePlayerBodyClick(event) {
 }
 
 function getPlaybackLink(item) {
-  return String(item.uploadUrl || item.draftUrl || "").trim();
+  return String(item.uploadUrl || "").trim();
 }
 
 function buildPlayerEmbed(rawUrl) {

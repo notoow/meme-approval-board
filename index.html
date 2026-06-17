@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>밈 숏폼 제작 보드</title>
-    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-11" />
-    <link rel="stylesheet" href="./styles.css?v=20260617-11" />
+    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-12" />
+    <link rel="stylesheet" href="./styles.css?v=20260617-12" />
   </head>
   <body>
     <div class="app-shell">
@@ -95,7 +95,6 @@
                   <th>단계</th>
                   <th>담당</th>
                   <th>업로드일</th>
-                  <th>컨펌</th>
                   <th>작업</th>
                 </tr>
               </thead>
@@ -171,7 +170,7 @@
             <span>초안 영상 링크</span>
             <input id="draftUrlInput" name="draftUrl" type="url" placeholder="https://..." />
           </label>
-          <label class="field">
+          <label class="field" hidden>
             <span>컨펌 상태</span>
             <select id="approvalInput" name="approval">
               <option>미확인</option>
@@ -202,6 +201,36 @@
           <span></span>
           <button class="secondary-button" value="cancel" type="submit">취소</button>
           <button class="primary-button" id="saveItemButton" type="button">저장</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal final-modal" id="finalDialog">
+      <form class="modal-card" id="finalForm">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">완성본 업로드</p>
+            <h2 id="finalDialogTitle">완성본 링크 저장</h2>
+          </div>
+          <button class="icon-button" id="closeFinalButton" aria-label="닫기" type="button">×</button>
+        </div>
+
+        <input id="finalItemId" type="hidden" />
+        <div class="final-upload-summary">
+          <strong id="finalItemTitle">콘텐츠 제목</strong>
+          <span>NAS 파일 경로, 유튜브 일부공개 링크, 또는 mp4 링크를 붙여넣으면 됩니다.</span>
+        </div>
+
+        <label class="field span-2">
+          <span>완성본 링크/NAS 경로</span>
+          <input id="finalUploadUrlInput" name="finalUploadUrl" type="text" required placeholder="\\192.168.0.10\...\완성본.mp4" />
+        </label>
+
+        <div class="modal-actions final-actions">
+          <span></span>
+          <button class="secondary-button" id="cancelFinalButton" type="button">취소</button>
+          <button class="secondary-button" id="saveFinalButton" type="button">저장</button>
+          <button class="primary-button" id="saveFinalPreviewButton" type="button">저장 후 미리보기</button>
         </div>
       </form>
     </dialog>
@@ -270,6 +299,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260617-11"></script>
+    <script src="./app.js?v=20260617-12"></script>
   </body>
 </html>
