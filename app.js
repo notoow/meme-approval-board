@@ -188,7 +188,7 @@ async function submitQuickLinks(event = {}) {
   const reference = els.quickReferenceInput.value.trim();
 
   for (const [index, url] of uniqueUrls.entries()) {
-    const item = createQuickItem(url, reference, index, uniqueUrls.length);
+    const item = await enrichItemMetadata(createQuickItem(url, reference, index, uniqueUrls.length));
     const saved = await updateItem(item, { silent: true });
     if (!saved) break;
     addedCount += 1;
@@ -640,12 +640,26 @@ async function refreshMissingMetadata() {
 
   try {
     setSaveState("썸네일 확인 중");
-    const response = await requestApi("refreshMetadata");
-    if (response.items) {
-      items = normalizeItems(response.items);
-      persistLocalFallback();
-      render();
+    const targets = items.filter(needsMetadata).slice(0, 8);
+
+    for (const item of targets) {
+      const enriched = await enrichItemMetadata(item);
+      if (hasMetadataChange(item, enriched)) {
+        await updateItem(enriched, { silent: true });
+      }
     }
+
+    try {
+      const response = await requestApi("refreshMetadata");
+      if (response.items) {
+        items = normalizeItems(response.items);
+        persistLocalFallback();
+        render();
+      }
+    } catch (error) {
+      console.warn("server metadata refresh unavailable", error);
+    }
+
     setSaveState("준비됨");
   } catch (error) {
     console.warn("metadata refresh failed", error);
@@ -655,6 +669,67 @@ async function refreshMissingMetadata() {
 
 function needsMetadata(item) {
   return !item.thumbnail || isAutoTitle(item.title, item.platform);
+}
+
+function hasMetadataChange(before, after) {
+  return (
+    before.title !== after.title ||
+    before.thumbnail !== after.thumbnail ||
+    before.sourceUrl !== after.sourceUrl ||
+    before.platform !== after.platform
+  );
+}
+
+async function enrichItemMetadata(item) {
+  const next = {
+    ...item,
+    sourceUrl: canonicalizeSourceUrl(item.sourceUrl),
+    platform: item.platform || inferPlatform(item.sourceUrl),
+  };
+
+  if (next.platform === "유튜브" && !next.thumbnail) {
+    next.thumbnail = youtubeThumbnail(next.sourceUrl);
+  }
+
+  const endpoint = metadataEndpoint(next.sourceUrl, next.platform);
+  if (!endpoint) return next;
+
+  try {
+    const data = await fetchJson(endpoint);
+    if (data?.title && isAutoTitle(next.title, next.platform)) {
+      next.title = data.title;
+    }
+    if (data?.thumbnail_url && !next.thumbnail) {
+      next.thumbnail = data.thumbnail_url;
+    }
+  } catch (error) {
+    console.warn("metadata fetch failed", error);
+  }
+
+  return next;
+}
+
+function metadataEndpoint(url, platform) {
+  if (platform === "유튜브") {
+    return `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`;
+  }
+  if (platform === "틱톡") {
+    return `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
+  }
+  return "";
+}
+
+async function fetchJson(url) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`metadata request failed: ${response.status}`);
+    return await response.json();
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 function isAutoTitle(title, platform) {
@@ -686,12 +761,13 @@ function normalizeStatus(status) {
 }
 
 function normalizeItem(row) {
+  const sourceUrl = canonicalizeSourceUrl(row.sourceUrl);
   return {
     id: String(row.id || createId()),
     title: row.title || "",
-    sourceUrl: row.sourceUrl || "",
+    sourceUrl,
     thumbnail: row.thumbnail || "",
-    platform: row.platform || inferPlatform(row.sourceUrl),
+    platform: row.platform || inferPlatform(sourceUrl),
     reference: row.reference || "",
     owner: row.owner || "",
     status: normalizeStatus(row.status),
@@ -711,12 +787,13 @@ function createId() {
 }
 
 function createQuickItem(url, reference, index, total) {
-  const platform = inferPlatform(url);
+  const sourceUrl = canonicalizeSourceUrl(url);
+  const platform = inferPlatform(sourceUrl);
   return {
     id: createId(),
-    title: createQuickTitle(url, platform, index, total),
-    sourceUrl: url,
-    thumbnail: youtubeThumbnail(url),
+    title: createQuickTitle(sourceUrl, platform, index, total),
+    sourceUrl,
+    thumbnail: youtubeThumbnail(sourceUrl),
     platform,
     reference: reference || "링크 자동 등록",
     owner: settings.userName || "",
@@ -766,7 +843,7 @@ function extractUrls(text) {
 }
 
 function normalizeUrlKey(url) {
-  const value = String(url || "").trim();
+  const value = canonicalizeSourceUrl(url);
   if (!value) return "";
 
   const youtubeId = youtubeVideoId(value);
@@ -881,6 +958,16 @@ function inferPlatform(url) {
   if (lower.includes("instagram.com")) return "인스타";
   if (lower.includes("tiktok.com")) return "틱톡";
   return "기타";
+}
+
+function canonicalizeSourceUrl(url) {
+  const value = String(url || "").trim();
+  if (!value) return "";
+
+  let normalized = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  normalized = normalized.replace("instagram.com/reels/", "instagram.com/reel/");
+  normalized = normalized.replace("www.instagram.com/reels/", "www.instagram.com/reel/");
+  return normalized;
 }
 
 function platformInitial(platform) {
