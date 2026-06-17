@@ -58,6 +58,11 @@ const els = {
   playerTitle: document.querySelector("#playerTitle"),
   playerVersionTabs: document.querySelector("#playerVersionTabs"),
   playerBody: document.querySelector("#playerBody"),
+  playerRevisionTitle: document.querySelector("#playerRevisionTitle"),
+  playerRevisionStatus: document.querySelector("#playerRevisionStatus"),
+  playerRevisionInput: document.querySelector("#playerRevisionInput"),
+  saveRevisionButton: document.querySelector("#saveRevisionButton"),
+  revisionHistory: document.querySelector("#revisionHistory"),
   playerOpenLink: document.querySelector("#playerOpenLink"),
   closePlayerButton: document.querySelector("#closePlayerButton"),
   finalDialog: document.querySelector("#finalDialog"),
@@ -136,6 +141,7 @@ els.closePlayerButton.addEventListener("click", closePlayerDialog);
 els.playerDialog.addEventListener("close", clearPlayerDialog);
 els.playerBody.addEventListener("click", handlePlayerBodyClick);
 els.playerVersionTabs.addEventListener("click", handlePlayerVersionClick);
+els.saveRevisionButton.addEventListener("click", saveRevisionRequestFromPlayer);
 document.querySelector("#saveSettingsButton").addEventListener("click", saveSettingsFromDialog);
 document.querySelector("#clearSettingsButton").addEventListener("click", clearSettings);
 els.createShareLinkButton.addEventListener("click", createSettingsShareLink);
@@ -1437,6 +1443,83 @@ function serializeFinalVersions(versions) {
     .join("\n");
 }
 
+function getRevisionRequests(item) {
+  const rawValue = String(item.feedback || "").trim();
+  if (!rawValue) return [];
+
+  const parsedLines = rawValue
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map(parseRevisionLine)
+    .filter(Boolean);
+
+  if (parsedLines.length > 0) {
+    return parsedLines;
+  }
+
+  return [
+    {
+      label: "기존 메모",
+      version: "-",
+      date: "-",
+      note: rawValue,
+    },
+  ];
+}
+
+function parseRevisionLine(line) {
+  const parts = String(line || "").split("|").map((part) => part.trim());
+  if (parts.length < 4) return null;
+
+  return {
+    label: parts[0] || "수정 요청",
+    version: parts[1] || "-",
+    date: parts[2] || "-",
+    note: parts.slice(3).join(" | ").trim(),
+  };
+}
+
+function serializeRevisionRequests(revisions) {
+  return revisions
+    .map((revision) => ({
+      label: String(revision.label || "수정 요청").trim(),
+      version: String(revision.version || "-").trim(),
+      date: String(revision.date || "-").trim(),
+      note: sanitizeRevisionNote(revision.note),
+    }))
+    .filter((revision) => revision.note)
+    .map((revision) => `${revision.label} | ${revision.version} | ${revision.date} | ${revision.note}`)
+    .join("\n");
+}
+
+function nextRevisionLabel(revisions) {
+  const sequenceNumbers = revisions
+    .map((revision) => String(revision.label || "").match(/^(\d+)차\s*수정/))
+    .filter(Boolean)
+    .map((match) => Number(match[1]))
+    .filter(Number.isFinite);
+
+  const next = sequenceNumbers.length > 0 ? Math.max(...sequenceNumbers) + 1 : 1;
+  return `${next}차 수정`;
+}
+
+function sanitizeRevisionNote(note) {
+  return String(note || "")
+    .replace(/\s*\r?\n\s*/g, " / ")
+    .replace(/\|/g, "/")
+    .trim();
+}
+
+function formatRevisionTimestamp(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
 function validateFinalUploadControl(control) {
   const normalized = normalizeFinalUploadPath(control.value);
 
@@ -1592,11 +1675,16 @@ function openPlayerDialog(item, versionIndex = null) {
   if (!link) return;
 
   const player = buildPlayerEmbed(link);
+  const isSameOpenPlayer = els.playerDialog.open && activePlayerItemId === item.id;
   activePlayerItemId = item.id;
   activePlayerVersionIndex = Math.max(selectedIndex, 0);
   els.playerTitle.textContent = item.title || "완성본";
+  if (!isSameOpenPlayer) {
+    els.playerRevisionInput.value = "";
+  }
   renderPlayerVersionTabs(versions, activePlayerVersionIndex);
   els.playerBody.innerHTML = player.html;
+  renderRevisionPanel(item, versions, activePlayerVersionIndex);
 
   if (player.openUrl) {
     els.playerOpenLink.hidden = false;
@@ -1627,6 +1715,90 @@ function renderPlayerVersionTabs(versions, activeIndex) {
     .join("");
 }
 
+function renderRevisionPanel(item, versions, activeIndex) {
+  const selected = versions[activeIndex] || versions[versions.length - 1] || { label: "현재 버전" };
+  const revisions = getRevisionRequests(item);
+  const countLabel = revisions.length > 0 ? `${revisions.length}개 기록됨` : "영상을 보면서 수정 내용을 남기세요";
+
+  els.playerRevisionTitle.textContent = `${selected.label} 수정 요청`;
+  els.playerRevisionStatus.textContent = countLabel;
+  renderRevisionHistory(revisions);
+}
+
+function renderRevisionHistory(revisions) {
+  if (revisions.length === 0) {
+    els.revisionHistory.innerHTML = `<div class="revision-empty">수정 요청 기록 없음</div>`;
+    return;
+  }
+
+  els.revisionHistory.innerHTML = revisions
+    .slice()
+    .reverse()
+    .map((revision) => {
+      const version = revision.version && revision.version !== "-" ? `<span>${escapeHtml(revision.version)}</span>` : "";
+      const date = revision.date && revision.date !== "-" ? `<small>${escapeHtml(revision.date)}</small>` : "";
+
+      return `
+        <div class="revision-entry">
+          <div class="revision-entry-head">
+            <strong>${escapeHtml(revision.label || "수정 요청")}</strong>
+            ${version}
+          </div>
+          ${date}
+          <p>${escapeHtml(revision.note || "")}</p>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+async function saveRevisionRequestFromPlayer() {
+  const item = items.find((row) => row.id === activePlayerItemId);
+  if (!item) return;
+
+  const note = sanitizeRevisionNote(els.playerRevisionInput.value);
+  if (!note) {
+    els.playerRevisionInput.focus();
+    return;
+  }
+
+  const versions = getFinalVersions(item);
+  const selectedVersion = versions[activePlayerVersionIndex] || versions[versions.length - 1] || { label: "-" };
+  const revisions = getRevisionRequests(item);
+  const nextRevision = {
+    label: nextRevisionLabel(revisions),
+    version: selectedVersion.label || "-",
+    date: formatRevisionTimestamp(new Date()),
+    note,
+  };
+
+  const updated = {
+    ...item,
+    feedback: serializeRevisionRequests([...revisions, nextRevision]),
+    approval: "수정요청",
+    status: "수정중",
+    updatedAt: new Date().toISOString(),
+    updatedBy: settings.userName || item.updatedBy || "",
+  };
+
+  els.saveRevisionButton.disabled = true;
+  els.playerRevisionStatus.textContent = "수정 요청 저장 중";
+
+  const saved = await updateItem(updated, { silent: true });
+  els.saveRevisionButton.disabled = false;
+
+  if (!saved) {
+    els.playerRevisionStatus.textContent = "저장 실패";
+    alert("수정 요청 저장에 실패했습니다. 설정의 API URL과 비밀번호를 확인해 주세요.");
+    return;
+  }
+
+  els.playerRevisionInput.value = "";
+  const refreshed = items.find((row) => row.id === item.id) || updated;
+  renderRevisionPanel(refreshed, getFinalVersions(refreshed), activePlayerVersionIndex);
+  els.playerRevisionStatus.textContent = `${nextRevision.label} 저장됨`;
+}
+
 function handlePlayerVersionClick(event) {
   const button = event.target.closest("[data-version-index]");
   if (!button || !activePlayerItemId) return;
@@ -1647,6 +1819,11 @@ function clearPlayerDialog() {
   els.playerVersionTabs.innerHTML = "";
   els.playerVersionTabs.hidden = true;
   els.playerBody.innerHTML = "";
+  els.playerRevisionTitle.textContent = "수정 요청";
+  els.playerRevisionStatus.textContent = "영상을 보면서 수정 내용을 남기세요";
+  els.playerRevisionInput.value = "";
+  els.revisionHistory.innerHTML = "";
+  els.saveRevisionButton.disabled = false;
   els.playerOpenLink.removeAttribute("href");
 }
 

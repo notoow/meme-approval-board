@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>밈 숏폼 제작 보드</title>
-    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-14" />
-    <link rel="stylesheet" href="./styles.css?v=20260617-14" />
+    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-15" />
+    <link rel="stylesheet" href="./styles.css?v=20260617-15" />
   </head>
   <body>
     <div class="app-shell">
@@ -255,6 +255,17 @@
         </div>
         <div class="player-version-tabs" id="playerVersionTabs" aria-label="완성본 버전 선택"></div>
         <div class="player-body" id="playerBody"></div>
+        <section class="player-revision-panel" aria-label="수정 요청">
+          <div class="player-revision-head">
+            <strong id="playerRevisionTitle">수정 요청</strong>
+            <span id="playerRevisionStatus">영상을 보면서 수정 내용을 남기세요</span>
+          </div>
+          <textarea id="playerRevisionInput" rows="3" placeholder="예: 00초 자막 수정, 마지막 컷 1초 줄이기"></textarea>
+          <div class="player-revision-actions">
+            <button class="secondary-button" id="saveRevisionButton" type="button">수정 요청 저장</button>
+          </div>
+          <div class="revision-history" id="revisionHistory"></div>
+        </section>
         <div class="player-actions">
           <a class="secondary-button" id="playerOpenLink" target="_blank" rel="noreferrer">새 창으로 열기</a>
         </div>
@@ -339,6 +350,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260617-14"></script>
+    <script src="./app.js?v=20260617-15"></script>
   </body>
 </html>
