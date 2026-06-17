@@ -1,0 +1,14 @@
+{
+  "name": "meme-board-nas-stream-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Small HTTP range streaming bridge for NAS/SMB video paths used by meme-approval-board.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}

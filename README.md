@@ -7,14 +7,15 @@ GitHub Pages와 Google Sheets로 쓰는 간단한 컨펌 보드입니다.
 - `app.js`: Google Apps Script API 연동과 화면 동작
 - `apps-script/Code.gs`: Google Sheets를 API처럼 쓰는 Apps Script
 - `data/sample-videos.json`: 연결 전 샘플 데이터
+- `nas-stream-server`: NAS/SMB 파일 경로를 웹 영상 스트림으로 바꾸는 작은 헬퍼 서버
 
 ## 사용 흐름
 
 1. Google Sheets를 만들고 Apps Script를 연결합니다.
 2. GitHub Pages에 이 폴더를 올립니다.
 3. 웹 화면의 `설정`에서 Apps Script URL, 비밀번호, 사용자 이름을 한 번 저장합니다.
-4. 고용주는 첫 화면의 큰 입력칸에 인스타/유튜브/틱톡 링크를 붙여넣습니다.
-5. 링크는 자동으로 Google Sheet에 `촬영필요` 단계로 추가됩니다.
+4. 고용주는 첫 화면에서 `제작 제목`, `링크`, `설명` 묶음을 입력합니다.
+5. 입력한 묶음은 Google Sheet에 `촬영필요` 단계로 추가됩니다.
 
 ## 권장 시트 컬럼
 
@@ -26,7 +27,7 @@ Apps Script의 `setupSheet`를 실행하면 위 헤더가 자동으로 만들어
 
 ## 운영 팁
 
-- 여러 링크를 한 번에 붙여넣어도 자동으로 나눠서 등록됩니다.
+- 제목/링크/설명 한 묶음에 하나씩 입력합니다. 입력을 시작하면 다음 빈 묶음이 자동으로 생깁니다.
 - 이미 등록된 링크는 중복으로 추가하지 않습니다.
 - 고용주에게는 `컨펌 대기` 탭만 보게 안내하면 됩니다.
 - 수정이 필요한 경우 `수정` 버튼을 누르고 메모만 남기게 하세요.
@@ -39,3 +40,20 @@ Apps Script의 `setupSheet`를 실행하면 위 헤더가 자동으로 만들어
 `https://notoow.github.io/meme-approval-board/#apiUrl=APPS_SCRIPT_URL&secret=접속비밀번호&user=김대표`
 
 설정값은 URL에서 바로 지워지고, 이후에는 같은 브라우저에서 그냥 Pages 주소만 열어도 됩니다.
+
+## NAS 완성본 재생
+
+보드의 `완성본 링크`에는 유튜브 링크, 직접 mp4 링크, 또는 NAS 파일 경로를 넣을 수 있습니다.
+
+```text
+\\192.168.0.10\highst_영상팀\@종편,클린본,콜렉트\숏폼\밈 나스링크\260616 무영등트랜지션 3차 완성본.mp4
+```
+
+브라우저는 SMB 경로를 직접 재생할 수 없어서 `nas-stream-server` 헬퍼가 필요합니다.
+
+```powershell
+cd .\nas-stream-server
+.\start-windows.ps1
+```
+
+기본 스트리밍 주소는 `http://127.0.0.1:8787`입니다. 보드 설정의 `NAS 스트리밍 주소`에서 바꿀 수 있습니다.

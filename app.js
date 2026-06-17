@@ -1,5 +1,6 @@
 const STORAGE_KEY = "meme-board-settings";
 const LOCAL_DATA_KEY = "meme-board-local-data";
+const DEFAULT_NAS_STREAM_URL = "http://127.0.0.1:8787";
 
 const STATUS_CLASS = {
   "촬영필요": "status-wait",
@@ -54,6 +55,7 @@ const els = {
   closePlayerButton: document.querySelector("#closePlayerButton"),
   settingsDialog: document.querySelector("#settingsDialog"),
   apiUrlInput: document.querySelector("#apiUrlInput"),
+  nasStreamUrlInput: document.querySelector("#nasStreamUrlInput"),
   apiSecretInput: document.querySelector("#apiSecretInput"),
   userNameInput: document.querySelector("#userNameInput"),
   createShareLinkButton: document.querySelector("#createShareLinkButton"),
@@ -720,6 +722,7 @@ function requestApiJsonp(payload, originalError) {
 
 function openSettings() {
   els.apiUrlInput.value = settings.apiUrl || "";
+  els.nasStreamUrlInput.value = settings.nasStreamUrl || DEFAULT_NAS_STREAM_URL;
   els.apiSecretInput.value = settings.apiSecret || "";
   els.userNameInput.value = settings.userName || "";
   els.shareLinkStatus.textContent = "담당자 이름까지 포함해서 복사됩니다";
@@ -729,6 +732,7 @@ function openSettings() {
 async function saveSettingsFromDialog() {
   settings = {
     apiUrl: els.apiUrlInput.value.trim(),
+    nasStreamUrl: normalizeNasStreamUrl(els.nasStreamUrlInput.value.trim()),
     apiSecret: els.apiSecretInput.value.trim(),
     userName: els.userNameInput.value.trim(),
   };
@@ -739,6 +743,7 @@ async function saveSettingsFromDialog() {
 
 async function createSettingsShareLink() {
   const apiUrl = els.apiUrlInput.value.trim();
+  const nasStreamUrl = normalizeNasStreamUrl(els.nasStreamUrlInput.value.trim());
   const apiSecret = els.apiSecretInput.value.trim();
   const userName = els.userNameInput.value.trim();
 
@@ -750,6 +755,7 @@ async function createSettingsShareLink() {
   const shareUrl = new URL(window.location.href);
   shareUrl.hash = new URLSearchParams({
     apiUrl,
+    nasStreamUrl,
     apiSecret,
     userName,
   }).toString();
@@ -800,14 +806,16 @@ function loadSettings() {
 function applySharedSettings(saved) {
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const apiUrl = params.get("apiUrl") || params.get("api");
+  const nasStreamUrl = params.get("nasStreamUrl") || params.get("nas");
   const apiSecret = params.get("apiSecret") || params.get("secret");
   const userName = params.get("userName") || params.get("user");
 
-  if (!apiUrl && !apiSecret && !userName) return saved;
+  if (!apiUrl && !nasStreamUrl && !apiSecret && !userName) return saved;
 
   const next = {
     ...saved,
     apiUrl: apiUrl || saved.apiUrl || "",
+    nasStreamUrl: normalizeNasStreamUrl(nasStreamUrl || saved.nasStreamUrl || ""),
     apiSecret: apiSecret || saved.apiSecret || "",
     userName: userName || saved.userName || "",
   };
@@ -818,6 +826,14 @@ function applySharedSettings(saved) {
 
 function hasApiSettings() {
   return Boolean(settings.apiUrl && settings.apiSecret);
+}
+
+function getNasStreamUrl() {
+  return normalizeNasStreamUrl(settings.nasStreamUrl || DEFAULT_NAS_STREAM_URL);
+}
+
+function normalizeNasStreamUrl(url) {
+  return String(url || "").trim().replace(/\/+$/, "");
 }
 
 function persistLocalFallback() {
@@ -1180,15 +1196,12 @@ function buildPlayerEmbed(rawUrl) {
   const escapedUrl = escapeAttr(url);
 
   if (isNasFilePath(url)) {
+    const streamUrl = buildNasStreamUrl(url);
     return {
-      openUrl: "",
+      openUrl: streamUrl,
       html: `
-        <div class="player-message">
-          <strong>이 NAS 경로는 웹에서 바로 재생할 수 없습니다.</strong>
-          <p>브라우저 플레이어는 SMB 경로가 아니라 https로 열리는 mp4 주소가 필요합니다.</p>
-          <code>${escapeHtml(url)}</code>
-          <button class="secondary-button" type="button" data-copy-player-link="${escapedUrl}">경로 복사</button>
-        </div>
+        <video class="player-video" src="${escapeAttr(streamUrl)}" controls autoplay playsinline></video>
+        <p class="player-hint">NAS 경로를 스트리밍 서버로 연결했습니다. 재생이 안 되면 NAS 스트리밍 서버가 켜져 있는지 확인해 주세요.</p>
       `,
     };
   }
@@ -1241,6 +1254,11 @@ function buildPlayerEmbed(rawUrl) {
 function isNasFilePath(url) {
   const value = String(url || "").trim();
   return value.startsWith("\\\\") || value.startsWith("//") || /^[a-zA-Z]:\\/.test(value);
+}
+
+function buildNasStreamUrl(path) {
+  const base = getNasStreamUrl();
+  return `${base}/stream?path=${encodeURIComponent(path)}`;
 }
 
 function isDirectVideoUrl(url) {

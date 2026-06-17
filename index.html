@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>밈 숏폼 제작 보드</title>
-    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-10" />
-    <link rel="stylesheet" href="./styles.css?v=20260617-10" />
+    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-11" />
+    <link rel="stylesheet" href="./styles.css?v=20260617-11" />
   </head>
   <body>
     <div class="app-shell">
@@ -242,6 +242,10 @@
             <span>Apps Script 웹앱 URL</span>
             <input id="apiUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
           </label>
+          <label class="field span-2">
+            <span>NAS 스트리밍 주소 <em class="optional-label">선택</em></span>
+            <input id="nasStreamUrlInput" type="url" placeholder="http://127.0.0.1:8787" />
+          </label>
           <label class="field">
             <span>접속 비밀번호</span>
             <input id="apiSecretInput" type="password" placeholder="설정한 비밀번호" />
@@ -266,6 +270,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260617-10"></script>
+    <script src="./app.js?v=20260617-11"></script>
   </body>
 </html>
