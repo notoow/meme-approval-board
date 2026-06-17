@@ -361,7 +361,7 @@ h2 {
 
 .content-table {
   width: 100%;
-  min-width: 980px;
+  min-width: 860px;
   border-collapse: collapse;
 }
 
@@ -408,6 +408,9 @@ h2 {
 
 .thumb-fallback {
   background: #ffffff;
+  padding: 10px;
+  text-align: center;
+  font-size: 13px;
 }
 
 .thumb img {

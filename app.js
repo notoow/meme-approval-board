@@ -228,7 +228,7 @@ function render() {
 function renderSummary() {
   els.pendingCount.textContent = items.filter((item) => item.status === "컨펌대기").length;
   els.revisionCount.textContent = items.filter((item) => item.status === "수정중" || item.approval === "수정요청").length;
-  els.dueTodayCount.textContent = items.filter((item) => isToday(item.dueDate) && item.status !== "업로드완료" && item.status !== "보류").length;
+  els.dueTodayCount.textContent = items.filter((item) => isToday(item.scheduleDate) && item.status !== "보류").length;
   els.doneCount.textContent = items.filter((item) => item.status === "업로드완료").length;
 }
 
@@ -243,10 +243,9 @@ function renderTable(rows) {
               ${renderVideoInfo(item)}
             </div>
           </td>
-          <td>${renderPlatform(item.platform)}</td>
           <td>${renderStatus(item.status)}</td>
           <td><span class="date-text">${escapeHtml(item.owner || "-")}</span></td>
-          <td>${renderDueDate(item.dueDate)}</td>
+          <td>${renderUploadDate(item.scheduleDate)}</td>
           <td>${renderApproval(item.approval)}</td>
           <td>
             <div class="row-actions">
@@ -271,11 +270,10 @@ function renderMobile(rows) {
             <div class="mobile-info">
               ${renderVideoInfo(item)}
               <div class="mobile-tags">
-                ${renderPlatform(item.platform)}
                 ${renderStatus(item.status)}
                 ${renderApproval(item.approval)}
               </div>
-              <span class="date-text">담당 ${escapeHtml(item.owner || "-")} · 마감 ${escapeHtml(formatDate(item.dueDate))}</span>
+              <span class="date-text">담당 ${escapeHtml(item.owner || "-")} · 업로드 ${escapeHtml(formatShortDate(item.scheduleDate))}</span>
             </div>
           </div>
           <div class="mobile-actions">
@@ -583,7 +581,7 @@ function getFilteredItems() {
     .filter((item) => {
       if (activeFilter === "approval") return item.status === "컨펌대기";
       if (activeFilter === "revision") return item.status === "수정중" || item.approval === "수정요청";
-      if (activeFilter === "week") return isThisWeek(item.dueDate) || isThisWeek(item.scheduleDate);
+      if (activeFilter === "week") return isThisWeek(item.scheduleDate);
       if (activeFilter === "done") return item.status === "업로드완료";
       return true;
     })
@@ -619,8 +617,8 @@ function getFilteredItems() {
       const bPriority = priority[b.status] || 9;
       if (aPriority !== bPriority) return aPriority - bPriority;
 
-      const aKey = a.dueDate || "9999-12-31";
-      const bKey = b.dueDate || "9999-12-31";
+      const aKey = a.scheduleDate || "9999-12-31";
+      const bKey = b.scheduleDate || "9999-12-31";
       return aKey.localeCompare(bKey);
     });
 }
@@ -866,11 +864,10 @@ function normalizeUrlKey(url) {
 
 function renderThumb(item) {
   const imageUrl = item.thumbnail || youtubeThumbnail(item.sourceUrl);
-  const mark = renderPlatformMark(item.platform);
   if (imageUrl) {
-    return `<span class="thumb"><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.add('thumb-fallback')">${mark}</span>`;
+    return `<span class="thumb"><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.add('thumb-fallback')"></span>`;
   }
-  return `<span class="thumb thumb-fallback">${mark}</span>`;
+  return `<span class="thumb thumb-fallback">썸네일 없음</span>`;
 }
 
 function renderVideoInfo(item) {
@@ -880,7 +877,7 @@ function renderVideoInfo(item) {
 
   return `
     <div class="video-copy">
-      <div class="video-title">${renderTitlePlatform(item.platform)}<span class="video-title-text">${escapeHtml(title)}</span></div>
+      <div class="video-title"><span class="video-title-text">${escapeHtml(title)}</span></div>
       <span class="video-meta">${escapeHtml(reference)}</span>
       <a class="source-link" href="${escapeAttr(item.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(sourceLabel)}</a>
     </div>
@@ -945,20 +942,18 @@ function renderApproval(approval) {
   return `<span class="approval-badge ${className}">${escapeHtml(label)}</span>`;
 }
 
-function renderDueDate(date) {
-  const className = isOverdue(date) ? "date-text is-overdue" : "date-text";
-  return `<span class="${className}">${escapeHtml(formatDate(date))}</span>`;
+function renderUploadDate(date) {
+  return `<span class="date-text">${escapeHtml(formatShortDate(date))}</span>`;
 }
 
-function formatDate(date) {
+function formatShortDate(date) {
   if (!date) return "-";
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return date;
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-  }).format(parsed);
+  const year = String(parsed.getFullYear()).slice(-2);
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}.${month}.${day}`;
 }
 
 function normalizeDateInput(value) {

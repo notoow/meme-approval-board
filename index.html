@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>밈 숏폼 제작 보드</title>
-    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-5" />
-    <link rel="stylesheet" href="./styles.css?v=20260617-5" />
+    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-6" />
+    <link rel="stylesheet" href="./styles.css?v=20260617-6" />
   </head>
   <body>
     <div class="app-shell">
@@ -69,7 +69,7 @@
             <strong id="revisionCount">0</strong>
           </article>
           <article class="summary-box">
-            <span>오늘 마감</span>
+            <span>오늘 업로드</span>
             <strong id="dueTodayCount">0</strong>
           </article>
           <article class="summary-box">
@@ -106,10 +106,9 @@
               <thead>
                 <tr>
                   <th>영상</th>
-                  <th>플랫폼</th>
                   <th>단계</th>
                   <th>담당</th>
-                  <th>마감</th>
+                  <th>업로드일</th>
                   <th>컨펌</th>
                   <th>작업</th>
                 </tr>
@@ -174,7 +173,7 @@
             <span>담당자</span>
             <input id="ownerInput" name="owner" placeholder="이름" />
           </label>
-          <label class="field">
+          <label class="field" hidden>
             <span>마감일</span>
             <input id="dueDateInput" name="dueDate" type="date" />
           </label>
@@ -195,7 +194,7 @@
             </select>
           </label>
           <label class="field">
-            <span>예약일</span>
+            <span>업로드 일자</span>
             <input id="scheduleDateInput" name="scheduleDate" type="date" />
           </label>
           <label class="field span-2">
@@ -260,6 +259,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260617-5"></script>
+    <script src="./app.js?v=20260617-6"></script>
   </body>
 </html>
