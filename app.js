@@ -47,6 +47,11 @@ const els = {
   itemDialog: document.querySelector("#itemDialog"),
   itemForm: document.querySelector("#itemForm"),
   itemDialogTitle: document.querySelector("#itemDialogTitle"),
+  playerDialog: document.querySelector("#playerDialog"),
+  playerTitle: document.querySelector("#playerTitle"),
+  playerBody: document.querySelector("#playerBody"),
+  playerOpenLink: document.querySelector("#playerOpenLink"),
+  closePlayerButton: document.querySelector("#closePlayerButton"),
   settingsDialog: document.querySelector("#settingsDialog"),
   apiUrlInput: document.querySelector("#apiUrlInput"),
   apiSecretInput: document.querySelector("#apiSecretInput"),
@@ -84,6 +89,9 @@ document.querySelector("#openSetupButton").addEventListener("click", openSetting
 document.querySelector("#refreshButton").addEventListener("click", loadItems);
 document.querySelector("#saveItemButton").addEventListener("click", saveItemFromForm);
 document.querySelector("#deleteButton").addEventListener("click", deleteCurrentItem);
+els.closePlayerButton.addEventListener("click", closePlayerDialog);
+els.playerDialog.addEventListener("close", clearPlayerDialog);
+els.playerBody.addEventListener("click", handlePlayerBodyClick);
 document.querySelector("#saveSettingsButton").addEventListener("click", saveSettingsFromDialog);
 document.querySelector("#clearSettingsButton").addEventListener("click", clearSettings);
 els.createShareLinkButton.addEventListener("click", createSettingsShareLink);
@@ -410,6 +418,7 @@ function renderTable(rows) {
             <div class="row-actions">
               <button class="row-button approve" type="button" data-action="approve" data-id="${escapeAttr(item.id)}">승인</button>
               <button class="row-button revise" type="button" data-action="revise" data-id="${escapeAttr(item.id)}">수정</button>
+              ${renderPlayButton(item)}
               <button class="row-button" type="button" data-action="edit" data-id="${escapeAttr(item.id)}">열기</button>
               <button class="row-button delete" type="button" data-action="delete" data-id="${escapeAttr(item.id)}" aria-label="삭제" title="삭제">${renderTrashIcon()}</button>
             </div>
@@ -439,6 +448,7 @@ function renderMobile(rows) {
           <div class="mobile-actions">
             <button class="row-button approve" type="button" data-action="approve" data-id="${escapeAttr(item.id)}">승인</button>
             <button class="row-button revise" type="button" data-action="revise" data-id="${escapeAttr(item.id)}">수정</button>
+            ${renderPlayButton(item)}
             <button class="row-button" type="button" data-action="edit" data-id="${escapeAttr(item.id)}">열기</button>
             <button class="row-button delete" type="button" data-action="delete" data-id="${escapeAttr(item.id)}" aria-label="삭제" title="삭제">${renderTrashIcon()}</button>
           </div>
@@ -462,6 +472,11 @@ function handleListAction(event) {
 
   if (button.dataset.action === "delete") {
     deleteItemById(item.id);
+    return;
+  }
+
+  if (button.dataset.action === "play") {
+    openPlayerDialog(item);
     return;
   }
 
@@ -1114,6 +1129,127 @@ function renderVideoInfo(item) {
       <a class="source-link" href="${escapeAttr(item.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(sourceLabel)}</a>
     </div>
   `;
+}
+
+function renderPlayButton(item) {
+  if (!getPlaybackLink(item)) return "";
+  return `<button class="row-button play" type="button" data-action="play" data-id="${escapeAttr(item.id)}">재생</button>`;
+}
+
+function openPlayerDialog(item) {
+  const link = getPlaybackLink(item);
+  if (!link) return;
+
+  const player = buildPlayerEmbed(link);
+  els.playerTitle.textContent = item.title || "완성본";
+  els.playerBody.innerHTML = player.html;
+
+  if (player.openUrl) {
+    els.playerOpenLink.hidden = false;
+    els.playerOpenLink.href = player.openUrl;
+  } else {
+    els.playerOpenLink.hidden = true;
+    els.playerOpenLink.removeAttribute("href");
+  }
+
+  els.playerDialog.showModal();
+}
+
+function closePlayerDialog() {
+  els.playerDialog.close();
+}
+
+function clearPlayerDialog() {
+  els.playerBody.innerHTML = "";
+  els.playerOpenLink.removeAttribute("href");
+}
+
+function handlePlayerBodyClick(event) {
+  const button = event.target.closest("[data-copy-player-link]");
+  if (!button) return;
+  copyText(button.dataset.copyPlayerLink || "");
+  button.textContent = "복사됨";
+}
+
+function getPlaybackLink(item) {
+  return String(item.uploadUrl || item.draftUrl || "").trim();
+}
+
+function buildPlayerEmbed(rawUrl) {
+  const url = String(rawUrl || "").trim();
+  const escapedUrl = escapeAttr(url);
+
+  if (isNasFilePath(url)) {
+    return {
+      openUrl: "",
+      html: `
+        <div class="player-message">
+          <strong>이 NAS 경로는 웹에서 바로 재생할 수 없습니다.</strong>
+          <p>브라우저 플레이어는 SMB 경로가 아니라 https로 열리는 mp4 주소가 필요합니다.</p>
+          <code>${escapeHtml(url)}</code>
+          <button class="secondary-button" type="button" data-copy-player-link="${escapedUrl}">경로 복사</button>
+        </div>
+      `,
+    };
+  }
+
+  const youtubeId = youtubeVideoId(url);
+  if (youtubeId) {
+    return {
+      openUrl: url,
+      html: `
+        <iframe
+          class="player-frame"
+          src="https://www.youtube.com/embed/${escapeAttr(youtubeId)}"
+          title="YouTube video player"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen
+        ></iframe>
+      `,
+    };
+  }
+
+  if (isDirectVideoUrl(url)) {
+    return {
+      openUrl: url,
+      html: `<video class="player-video" src="${escapedUrl}" controls autoplay playsinline></video>`,
+    };
+  }
+
+  if (/^https?:\/\//i.test(url)) {
+    return {
+      openUrl: url,
+      html: `
+        <iframe class="player-frame" src="${escapedUrl}" title="완성본 링크"></iframe>
+        <p class="player-hint">일부 NAS 공유 페이지는 보안 설정 때문에 팝업 안에서 안 보일 수 있습니다. 그때는 새 창으로 열어 주세요.</p>
+      `,
+    };
+  }
+
+  return {
+    openUrl: "",
+    html: `
+      <div class="player-message">
+        <strong>재생할 수 없는 링크 형식입니다.</strong>
+        <p>유튜브 링크 또는 https로 시작하는 mp4 링크를 넣어 주세요.</p>
+        <code>${escapeHtml(url)}</code>
+      </div>
+    `,
+  };
+}
+
+function isNasFilePath(url) {
+  const value = String(url || "").trim();
+  return value.startsWith("\\\\") || value.startsWith("//") || /^[a-zA-Z]:\\/.test(value);
+}
+
+function isDirectVideoUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return /\.(mp4|m4v|webm|ogg|ogv|mov)$/i.test(parsed.pathname);
+  } catch {
+    return /\.(mp4|m4v|webm|ogg|ogv|mov)(?:[?#].*)?$/i.test(String(url || ""));
+  }
 }
 
 function formatSourceLabel(url) {

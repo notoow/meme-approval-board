@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>밈 숏폼 제작 보드</title>
-    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-9" />
-    <link rel="stylesheet" href="./styles.css?v=20260617-9" />
+    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-10" />
+    <link rel="stylesheet" href="./styles.css?v=20260617-10" />
   </head>
   <body>
     <div class="app-shell">
@@ -188,8 +188,8 @@
             <textarea id="feedbackInput" name="feedback" rows="3" placeholder="수정할 내용을 적어주세요."></textarea>
           </label>
           <label class="field span-2">
-            <span>업로드 링크</span>
-            <input id="uploadUrlInput" name="uploadUrl" type="url" placeholder="https://..." />
+            <span>완성본 링크</span>
+            <input id="uploadUrlInput" name="uploadUrl" type="text" placeholder="https://... 또는 NAS 경로" />
           </label>
           <label class="field span-2">
             <span>썸네일 이미지 링크</span>
@@ -204,6 +204,22 @@
           <button class="primary-button" id="saveItemButton" type="button">저장</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog class="modal player-modal" id="playerDialog">
+      <div class="modal-card player-card">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">완성본 재생</p>
+            <h2 id="playerTitle">완성본</h2>
+          </div>
+          <button class="icon-button" id="closePlayerButton" aria-label="닫기" type="button">×</button>
+        </div>
+        <div class="player-body" id="playerBody"></div>
+        <div class="player-actions">
+          <a class="secondary-button" id="playerOpenLink" target="_blank" rel="noreferrer">새 창으로 열기</a>
+        </div>
+      </div>
     </dialog>
 
     <dialog class="modal" id="settingsDialog">
@@ -250,6 +266,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260617-9"></script>
+    <script src="./app.js?v=20260617-10"></script>
   </body>
 </html>
