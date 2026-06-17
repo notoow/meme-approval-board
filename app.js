@@ -3,6 +3,7 @@ const LOCAL_DATA_KEY = "meme-board-local-data";
 const DEFAULT_NAS_STREAM_URL = "http://127.0.0.1:8787";
 const FINAL_UPLOAD_PREFIX = "\\\\192.168.0.10\\highst_영상팀\\@종편,클린본,콜렉트\\숏폼\\밈 나스링크";
 const FINAL_UPLOAD_HELP = `${FINAL_UPLOAD_PREFIX}\\파일명.mp4 형식만 입력해 주세요.`;
+const REFERENCE_MARKER = "__reference_link__";
 
 const STATUS_CLASS = {
   "촬영필요": "status-wait",
@@ -37,6 +38,7 @@ let activePlayerItemId = "";
 let activePlayerVersionIndex = -1;
 
 const els = {
+  referenceSidebarButton: document.querySelector("#referenceSidebarButton"),
   setupNotice: document.querySelector("#setupNotice"),
   pendingCount: document.querySelector("#pendingCount"),
   revisionCount: document.querySelector("#revisionCount"),
@@ -64,6 +66,7 @@ const els = {
   finalItemTitle: document.querySelector("#finalItemTitle"),
   finalVersionHint: document.querySelector("#finalVersionHint"),
   finalUploadUrl: document.querySelector("#finalUploadUrlInput"),
+  finalComplete: document.querySelector("#finalCompleteInput"),
   closeFinalButton: document.querySelector("#closeFinalButton"),
   cancelFinalButton: document.querySelector("#cancelFinalButton"),
   saveFinalButton: document.querySelector("#saveFinalButton"),
@@ -81,6 +84,15 @@ const els = {
   addQuickItemButton: document.querySelector("#addQuickItemButton"),
   quickStatus: document.querySelector("#quickStatus"),
   quickAddButton: document.querySelector("#quickAddButton"),
+  referenceBackdrop: document.querySelector("#referenceBackdrop"),
+  referenceSidebar: document.querySelector("#referenceSidebar"),
+  closeReferenceSidebarButton: document.querySelector("#closeReferenceSidebarButton"),
+  referenceForm: document.querySelector("#referenceForm"),
+  referenceTitle: document.querySelector("#referenceTitleInput"),
+  referenceUrl: document.querySelector("#referenceUrlInput"),
+  referenceNote: document.querySelector("#referenceNoteInput"),
+  referenceStatus: document.querySelector("#referenceStatus"),
+  referenceList: document.querySelector("#referenceList"),
 };
 
 const form = {
@@ -106,6 +118,11 @@ document.querySelector("#openSetupButton").addEventListener("click", openSetting
 document.querySelector("#refreshButton").addEventListener("click", loadItems);
 document.querySelector("#saveItemButton").addEventListener("click", saveItemFromForm);
 document.querySelector("#deleteButton").addEventListener("click", deleteCurrentItem);
+els.referenceSidebarButton.addEventListener("click", openReferenceSidebar);
+els.closeReferenceSidebarButton.addEventListener("click", closeReferenceSidebar);
+els.referenceBackdrop.addEventListener("click", closeReferenceSidebar);
+els.referenceForm.addEventListener("submit", saveReferenceFromForm);
+els.referenceList.addEventListener("click", handleReferenceListClick);
 els.finalForm.addEventListener("submit", (event) => {
   event.preventDefault();
   saveFinalUploadFromForm({ preview: false });
@@ -415,15 +432,17 @@ function render() {
   renderSummary();
   renderTable(filtered);
   renderMobile(filtered);
+  renderReferenceList();
   els.emptyState.hidden = filtered.length > 0;
   els.listCaption.textContent = getCaption(filtered.length);
 }
 
 function renderSummary() {
-  els.pendingCount.textContent = items.filter((item) => item.status === "컨펌대기").length;
-  els.revisionCount.textContent = items.filter((item) => item.status === "수정중" || item.approval === "수정요청").length;
-  els.dueTodayCount.textContent = items.filter((item) => isToday(item.scheduleDate) && item.status !== "보류").length;
-  els.doneCount.textContent = items.filter((item) => item.status === "업로드완료").length;
+  const productionItems = getProductionItems();
+  els.pendingCount.textContent = productionItems.filter((item) => item.status === "컨펌대기").length;
+  els.revisionCount.textContent = productionItems.filter((item) => item.status === "수정중" || item.approval === "수정요청").length;
+  els.dueTodayCount.textContent = productionItems.filter((item) => item.status === "작업완료").length;
+  els.doneCount.textContent = productionItems.filter((item) => item.status === "업로드완료").length;
 }
 
 function renderTable(rows) {
@@ -556,6 +575,12 @@ async function saveItemFromForm() {
   const now = new Date().toISOString();
   const id = form.id.value || createId();
   const current = items.find((item) => item.id === id);
+  const feedback = form.feedback.value.trim();
+  const feedbackChanged = Boolean(feedback && feedback !== String(current?.feedback || "").trim());
+  const selectedStatus = form.status.value;
+  const status = feedbackChanged && !["작업완료", "업로드완료", "보류"].includes(selectedStatus)
+    ? "수정중"
+    : selectedStatus;
   const item = {
     id,
     title: form.title.value.trim(),
@@ -564,10 +589,10 @@ async function saveItemFromForm() {
     platform: form.platform.value,
     reference: form.reference.value.trim(),
     owner: form.owner.value.trim(),
-    status: form.status.value,
+    status,
     draftUrl: form.draftUrl.value.trim(),
     approval: form.approval.value,
-    feedback: form.feedback.value.trim(),
+    feedback,
     dueDate: form.dueDate.value,
     scheduleDate: form.scheduleDate.value,
     uploadUrl: current?.uploadUrl || form.uploadUrl.value.trim(),
@@ -585,6 +610,7 @@ function openFinalUploadDialog(item) {
   els.finalItemTitle.textContent = item.title || "제작 제목 없음";
   els.finalVersionHint.textContent = `이번 업로드는 v${nextVersion}로 저장됩니다. NAS 완성본 경로만 입력해 주세요.`;
   els.finalUploadUrl.value = "";
+  els.finalComplete.checked = false;
   els.finalUploadUrl.setCustomValidity("");
   els.finalDialog.showModal();
   window.setTimeout(() => {
@@ -616,7 +642,7 @@ async function saveFinalUploadFromForm(options = {}) {
   const updated = {
     ...current,
     uploadUrl: serializeFinalVersions([...versions, nextVersion]),
-    status: statusAfterFinalUpload(current.status),
+    status: statusAfterFinalUpload(current.status, els.finalComplete.checked),
     updatedAt: new Date().toISOString(),
     updatedBy: settings.userName || current.updatedBy || "",
   };
@@ -636,10 +662,10 @@ async function saveFinalUploadFromForm(options = {}) {
   }
 }
 
-function statusAfterFinalUpload(status) {
+function statusAfterFinalUpload(status, isComplete = false) {
   const normalized = normalizeStatus(status);
-  const keepStatus = ["컨펌대기", "수정완료", "업로드완료", "보류"];
-  return keepStatus.includes(normalized) ? normalized : "작업완료";
+  if (normalized === "보류") return normalized;
+  return isComplete ? "작업완료" : "수정중";
 }
 
 async function updateItem(item, options = {}) {
@@ -691,7 +717,8 @@ async function deleteCurrentItem() {
 async function deleteItemById(id, options = {}) {
   const item = items.find((row) => row.id === id);
   const title = item?.title ? ` "${item.title}"` : "";
-  if (!confirm(`이 콘텐츠${title}를 삭제할까요?`)) return;
+  const message = options.confirmMessage || `이 콘텐츠${title}를 삭제할까요?`;
+  if (!confirm(message)) return;
 
   const previousItems = [...items];
   const removedItem = item;
@@ -719,6 +746,143 @@ async function deleteItemById(id, options = {}) {
     setSaveState("삭제 실패");
     alert("삭제에 실패했습니다. 설정의 API URL과 비밀번호를 확인해 주세요.");
   }
+}
+
+function openReferenceSidebar() {
+  els.referenceBackdrop.hidden = false;
+  els.referenceSidebar.hidden = false;
+  document.body.classList.add("is-drawer-open");
+  renderReferenceList();
+  window.setTimeout(() => els.referenceUrl.focus(), 0);
+}
+
+function closeReferenceSidebar() {
+  els.referenceBackdrop.hidden = true;
+  els.referenceSidebar.hidden = true;
+  document.body.classList.remove("is-drawer-open");
+}
+
+async function saveReferenceFromForm(event) {
+  event.preventDefault();
+  if (!els.referenceForm.reportValidity()) return;
+
+  if (!hasApiSettings()) {
+    setReferenceStatus("Google Sheets 연결 후 공유 레퍼런스로 저장됩니다");
+  }
+
+  const url = canonicalizeSourceUrl(els.referenceUrl.value.trim());
+  const title = els.referenceTitle.value.trim() || formatReferenceTitle(url);
+  const note = els.referenceNote.value.trim();
+  const item = normalizeItem({
+    id: createReferenceId(),
+    title,
+    sourceUrl: url,
+    thumbnail: "",
+    platform: inferPlatform(url),
+    reference: note,
+    owner: settings.userName || "",
+    status: "보류",
+    draftUrl: REFERENCE_MARKER,
+    approval: "레퍼런스",
+    feedback: "",
+    dueDate: "",
+    scheduleDate: "",
+    uploadUrl: "",
+    updatedAt: new Date().toISOString(),
+    updatedBy: settings.userName || "",
+  });
+
+  els.referenceForm.querySelector("button[type='submit']").disabled = true;
+  setReferenceStatus("레퍼런스 저장 중");
+
+  const saved = await updateItem(item, { silent: true });
+  els.referenceForm.querySelector("button[type='submit']").disabled = false;
+
+  if (!saved) {
+    setReferenceStatus("저장 실패");
+    alert("레퍼런스 저장에 실패했습니다. 설정의 API URL과 비밀번호를 확인해 주세요.");
+    return;
+  }
+
+  els.referenceTitle.value = "";
+  els.referenceUrl.value = "";
+  els.referenceNote.value = "";
+  setReferenceStatus("레퍼런스 추가됨");
+  renderReferenceList();
+  els.referenceUrl.focus();
+}
+
+function handleReferenceListClick(event) {
+  const button = event.target.closest("[data-reference-action]");
+  if (!button) return;
+
+  if (button.dataset.referenceAction === "delete") {
+    const item = items.find((row) => row.id === button.dataset.id);
+    const title = item?.title ? ` "${item.title}"` : "";
+    deleteItemById(button.dataset.id, {
+      confirmMessage: `레퍼런스${title}를 삭제할까요?`,
+    });
+  }
+}
+
+function renderReferenceList() {
+  const references = getReferenceItems();
+
+  if (references.length === 0) {
+    els.referenceList.innerHTML = `
+      <div class="reference-empty">
+        <strong>아직 레퍼런스가 없습니다.</strong>
+        <span>제작 요청은 아니지만 참고할 링크를 여기에 모아두세요.</span>
+      </div>
+    `;
+    return;
+  }
+
+  els.referenceList.innerHTML = references
+    .map((item) => {
+      return `
+        <article class="reference-card">
+          <div>
+            <a class="reference-title" href="${escapeAttr(item.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.title || "레퍼런스 링크")}</a>
+            <span class="reference-url">${escapeHtml(formatSourceLabel(item.sourceUrl))}</span>
+            ${item.reference ? `<p>${escapeHtml(item.reference)}</p>` : ""}
+          </div>
+          <button class="reference-delete" type="button" data-reference-action="delete" data-id="${escapeAttr(item.id)}" aria-label="레퍼런스 삭제">${renderTrashIcon()}</button>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function getProductionItems() {
+  return items.filter((item) => !isReferenceItem(item));
+}
+
+function getReferenceItems() {
+  return items
+    .filter(isReferenceItem)
+    .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+}
+
+function isReferenceItem(item) {
+  return item?.draftUrl === REFERENCE_MARKER || item?.approval === "레퍼런스";
+}
+
+function createReferenceId() {
+  return `ref_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function formatReferenceTitle(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.replace(/^www\./, "");
+  } catch {
+    return "레퍼런스 링크";
+  }
+}
+
+function setReferenceStatus(message) {
+  els.referenceStatus.textContent = message;
 }
 
 async function requestApi(action, payload = {}) {
@@ -921,11 +1085,11 @@ function persistLocalFallback() {
 }
 
 function getFilteredItems() {
-  return items
+  return getProductionItems()
     .filter((item) => {
       if (activeFilter === "approval") return item.status === "컨펌대기";
       if (activeFilter === "revision") return item.status === "수정중" || item.approval === "수정요청";
-      if (activeFilter === "week") return isThisWeek(item.scheduleDate);
+      if (activeFilter === "uploadWait") return item.status === "작업완료";
       if (activeFilter === "done") return item.status === "업로드완료";
       return true;
     })
@@ -971,8 +1135,8 @@ function getCaption(count) {
   const label = {
     all: "전체 콘텐츠",
     approval: "컨펌 대기 콘텐츠",
-    revision: "수정 요청 콘텐츠",
-    week: "이번 주 일정",
+    revision: "수정 중 콘텐츠",
+    uploadWait: "업로드 대기 콘텐츠",
     done: "업로드 완료 콘텐츠",
   }[activeFilter];
   return `${label} ${count}개를 표시합니다.`;
@@ -983,11 +1147,11 @@ function normalizeItems(rows) {
 }
 
 async function refreshMissingMetadata() {
-  if (!hasApiSettings() || !items.some(needsMetadata)) return;
+  if (!hasApiSettings() || !items.some((item) => !isReferenceItem(item) && needsMetadata(item))) return;
 
   try {
     setSaveState("썸네일 확인 중");
-    const targets = items.filter(needsMetadata).slice(0, 8);
+    const targets = items.filter((item) => !isReferenceItem(item) && needsMetadata(item)).slice(0, 8);
 
     for (const item of targets) {
       const enriched = await enrichItemMetadata(item);
@@ -1655,7 +1819,8 @@ function renderTrashIcon() {
 function renderStatus(status) {
   const label = normalizeStatus(status);
   const className = STATUS_CLASS[label] || "status-wait";
-  return `<span class="status-badge ${className}">${escapeHtml(label)}</span>`;
+  const displayLabel = label === "작업완료" ? "작업완료 / 업로드대기" : label;
+  return `<span class="status-badge ${className}">${escapeHtml(displayLabel)}</span>`;
 }
 
 function renderApproval(approval) {

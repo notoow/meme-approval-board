@@ -4,13 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>밈 숏폼 제작 보드</title>
-    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-13" />
-    <link rel="stylesheet" href="./styles.css?v=20260617-13" />
+    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-14" />
+    <link rel="stylesheet" href="./styles.css?v=20260617-14" />
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <div>
+        <button class="menu-button" id="referenceSidebarButton" type="button" aria-label="레퍼런스 링크 열기">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <div class="topbar-title">
           <p class="eyebrow">밈 숏폼 제작 관리</p>
           <h1>콘텐츠 컨펌 보드</h1>
         </div>
@@ -51,11 +56,11 @@
             <strong id="pendingCount">0</strong>
           </article>
           <article class="summary-box">
-            <span>수정 요청</span>
+            <span>수정 중</span>
             <strong id="revisionCount">0</strong>
           </article>
           <article class="summary-box">
-            <span>오늘 업로드</span>
+            <span>업로드 대기</span>
             <strong id="dueTodayCount">0</strong>
           </article>
           <article class="summary-box">
@@ -68,8 +73,8 @@
           <div class="filter-tabs" id="filterTabs">
             <button class="tab-button is-active" type="button" data-filter="all">전체</button>
             <button class="tab-button" type="button" data-filter="approval">컨펌 대기</button>
-            <button class="tab-button" type="button" data-filter="revision">수정 요청</button>
-            <button class="tab-button" type="button" data-filter="week">이번 주</button>
+            <button class="tab-button" type="button" data-filter="revision">수정 중</button>
+            <button class="tab-button" type="button" data-filter="uploadWait">업로드 대기</button>
             <button class="tab-button" type="button" data-filter="done">완료</button>
           </div>
           <label class="search-box">
@@ -146,7 +151,7 @@
               <option>촬영필요</option>
               <option>촬영완료</option>
               <option>작업중</option>
-              <option>작업완료</option>
+              <option value="작업완료">작업완료 / 업로드대기</option>
               <option>컨펌대기</option>
               <option>수정중</option>
               <option>수정완료</option>
@@ -225,6 +230,10 @@
           <span>완성본 링크/NAS 경로</span>
           <input id="finalUploadUrlInput" name="finalUploadUrl" type="text" required placeholder="\\192.168.0.10\highst_영상팀\@종편,클린본,콜렉트\숏폼\밈 나스링크\파일명.mp4" />
         </label>
+        <label class="check-field">
+          <input id="finalCompleteInput" type="checkbox" />
+          <span>이번 버전으로 작업 완료 / 업로드 대기</span>
+        </label>
 
         <div class="modal-actions final-actions">
           <span></span>
@@ -251,6 +260,36 @@
         </div>
       </div>
     </dialog>
+
+    <div class="drawer-backdrop" id="referenceBackdrop" hidden></div>
+    <aside class="reference-sidebar" id="referenceSidebar" aria-label="레퍼런스 링크" hidden>
+      <div class="reference-head">
+        <div>
+          <p class="eyebrow">레퍼런스</p>
+          <h2>참고 링크</h2>
+        </div>
+        <button class="icon-button" id="closeReferenceSidebarButton" type="button" aria-label="닫기">×</button>
+      </div>
+
+      <form class="reference-form" id="referenceForm">
+        <label class="field">
+          <span>제목 <em class="optional-label">선택</em></span>
+          <input id="referenceTitleInput" placeholder="예: 자막 톤 참고" />
+        </label>
+        <label class="field">
+          <span>링크</span>
+          <input id="referenceUrlInput" type="url" required placeholder="https://..." />
+        </label>
+        <label class="field">
+          <span>메모 <em class="optional-label">선택</em></span>
+          <textarea id="referenceNoteInput" rows="3" placeholder="어떤 점을 참고할지 적어두세요."></textarea>
+        </label>
+        <button class="primary-button" id="saveReferenceButton" type="submit">레퍼런스 추가</button>
+        <div class="reference-status" id="referenceStatus" role="status">참고 링크를 모아둘 수 있습니다</div>
+      </form>
+
+      <div class="reference-list" id="referenceList"></div>
+    </aside>
 
     <dialog class="modal" id="settingsDialog">
       <form method="dialog" class="modal-card">
@@ -300,6 +339,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260617-13"></script>
+    <script src="./app.js?v=20260617-14"></script>
   </body>
 </html>

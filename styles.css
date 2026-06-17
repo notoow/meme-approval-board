@@ -71,6 +71,31 @@ a:hover {
   margin-bottom: 20px;
 }
 
+.topbar-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.menu-button {
+  display: grid;
+  gap: 5px;
+  place-content: center;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.menu-button span {
+  display: block;
+  width: 22px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--slate);
+}
+
 .eyebrow {
   margin: 0 0 4px;
   color: var(--muted);
@@ -910,6 +935,25 @@ h2 {
   font-weight: 800;
 }
 
+.check-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--slate);
+  font-weight: 900;
+}
+
+.check-field input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--blue);
+}
+
 .player-card {
   display: grid;
   gap: 14px;
@@ -1097,6 +1141,129 @@ h2 {
   white-space: nowrap;
 }
 
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.reference-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 41;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 16px;
+  width: min(440px, 100%);
+  height: 100vh;
+  padding: 22px;
+  overflow: auto;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.reference-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.reference-form {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: var(--soft);
+  border-radius: 8px;
+}
+
+.reference-status {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.reference-list {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.reference-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.reference-title {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reference-url {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reference-card p {
+  display: -webkit-box;
+  margin: 8px 0 0;
+  overflow: hidden;
+  color: var(--slate);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.reference-delete {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #ffc5bd;
+  border-radius: 8px;
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.reference-delete svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 0 auto;
+  stroke: currentColor;
+  stroke-width: 2.2;
+}
+
+.reference-empty {
+  display: grid;
+  gap: 4px;
+  padding: 22px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.reference-empty strong {
+  color: var(--text);
+}
+
 [hidden] {
   display: none !important;
 }
@@ -1117,6 +1284,15 @@ h2 {
   .toolbar,
   .notice {
     flex-direction: column;
+  }
+
+  .topbar {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .topbar-actions {
+    grid-column: 1 / -1;
   }
 
   .quick-add {
@@ -1272,5 +1448,10 @@ h2 {
 
   .quick-entry {
     padding: 10px;
+  }
+
+  .reference-sidebar {
+    width: 100%;
+    padding: 18px;
   }
 }
