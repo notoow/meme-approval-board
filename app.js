@@ -55,6 +55,7 @@ const els = {
   deleteButton: document.querySelector("#deleteButton"),
   quickAddForm: document.querySelector("#quickAddForm"),
   quickLinkInput: document.querySelector("#quickLinkInput"),
+  quickTitleInput: document.querySelector("#quickTitleInput"),
   quickReferenceInput: document.querySelector("#quickReferenceInput"),
   quickStatus: document.querySelector("#quickStatus"),
   quickAddButton: document.querySelector("#quickAddButton"),
@@ -191,10 +192,11 @@ async function submitQuickLinks(event = {}) {
   setQuickStatus(`${uniqueUrls.length}개 등록 중`);
 
   let addedCount = 0;
+  const title = els.quickTitleInput.value.trim();
   const reference = els.quickReferenceInput.value.trim();
 
   for (const [index, url] of uniqueUrls.entries()) {
-    const item = await enrichItemMetadata(createQuickItem(url, reference, index, uniqueUrls.length));
+    const item = await enrichItemMetadata(createQuickItem(url, title, reference, index, uniqueUrls.length));
     const saved = await updateItem(item, { silent: true });
     if (!saved) break;
     addedCount += 1;
@@ -205,6 +207,7 @@ async function submitQuickLinks(event = {}) {
 
   if (addedCount > 0) {
     els.quickLinkInput.value = "";
+    els.quickTitleInput.value = "";
     els.quickReferenceInput.value = "";
     const duplicateText = duplicateCount ? `, 중복 ${duplicateCount}개 제외` : "";
     setQuickStatus(`${addedCount}개가 시트에 등록되었습니다${duplicateText}`);
@@ -237,10 +240,7 @@ function renderTable(rows) {
           <td>
             <div class="video-cell">
               ${renderThumb(item)}
-              <div>
-                <a class="video-title" href="${escapeAttr(item.sourceUrl)}" target="_blank" rel="noreferrer">${renderTitlePlatform(item.platform)}${escapeHtml(item.title)}</a>
-                <span class="video-meta">${escapeHtml(item.reference || "참고 포인트 없음")}</span>
-              </div>
+              ${renderVideoInfo(item)}
             </div>
           </td>
           <td>${renderPlatform(item.platform)}</td>
@@ -269,13 +269,12 @@ function renderMobile(rows) {
           <div class="mobile-main">
             ${renderThumb(item)}
             <div class="mobile-info">
-              <a class="video-title" href="${escapeAttr(item.sourceUrl)}" target="_blank" rel="noreferrer">${renderTitlePlatform(item.platform)}${escapeHtml(item.title)}</a>
+              ${renderVideoInfo(item)}
               <div class="mobile-tags">
                 ${renderPlatform(item.platform)}
                 ${renderStatus(item.status)}
                 ${renderApproval(item.approval)}
               </div>
-              <span class="video-meta">${escapeHtml(item.reference || "참고 포인트 없음")}</span>
               <span class="date-text">담당 ${escapeHtml(item.owner || "-")} · 마감 ${escapeHtml(formatDate(item.dueDate))}</span>
             </div>
           </div>
@@ -674,12 +673,11 @@ async function refreshMissingMetadata() {
 }
 
 function needsMetadata(item) {
-  return !item.thumbnail || isAutoTitle(item.title, item.platform);
+  return !item.thumbnail;
 }
 
 function hasMetadataChange(before, after) {
   return (
-    before.title !== after.title ||
     before.thumbnail !== after.thumbnail ||
     before.sourceUrl !== after.sourceUrl ||
     before.platform !== after.platform
@@ -702,9 +700,6 @@ async function enrichItemMetadata(item) {
 
   try {
     const data = await fetchJson(endpoint);
-    if (data?.title && isAutoTitle(next.title, next.platform)) {
-      next.title = data.title;
-    }
     if (data?.thumbnail_url && !next.thumbnail) {
       next.thumbnail = data.thumbnail_url;
     }
@@ -792,12 +787,12 @@ function createId() {
   return `meme_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
 }
 
-function createQuickItem(url, reference, index, total) {
+function createQuickItem(url, title, reference, index, total) {
   const sourceUrl = canonicalizeSourceUrl(url);
   const platform = inferPlatform(sourceUrl);
   return {
     id: createId(),
-    title: createQuickTitle(sourceUrl, platform, index, total),
+    title: createQuickTitle(sourceUrl, platform, index, total, title),
     sourceUrl,
     thumbnail: youtubeThumbnail(sourceUrl),
     platform,
@@ -815,7 +810,12 @@ function createQuickItem(url, reference, index, total) {
   };
 }
 
-function createQuickTitle(url, platform, index, total) {
+function createQuickTitle(url, platform, index, total, title = "") {
+  const cleanTitle = String(title || "").trim();
+  if (cleanTitle) {
+    return total > 1 ? `${cleanTitle} ${index + 1}` : cleanTitle;
+  }
+
   const now = new Date();
   const dateText = new Intl.DateTimeFormat("ko-KR", {
     month: "2-digit",
@@ -823,9 +823,8 @@ function createQuickTitle(url, platform, index, total) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(now);
-  const type = platform === "유튜브" && String(url).includes("/shorts/") ? "쇼츠" : "링크";
   const suffix = total > 1 ? ` ${index + 1}` : "";
-  return `${platform} ${type} ${dateText}${suffix}`;
+  return `제작 제목 미정 ${dateText}${suffix}`;
 }
 
 function extractUrls(text) {
@@ -872,6 +871,34 @@ function renderThumb(item) {
     return `<span class="thumb"><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.add('thumb-fallback')">${mark}</span>`;
   }
   return `<span class="thumb thumb-fallback">${mark}</span>`;
+}
+
+function renderVideoInfo(item) {
+  const title = String(item.title || "").trim() || "제작 제목 없음";
+  const reference = String(item.reference || "").trim() || "참고 메모 없음";
+  const sourceLabel = formatSourceLabel(item.sourceUrl);
+
+  return `
+    <div class="video-copy">
+      <div class="video-title">${renderTitlePlatform(item.platform)}<span class="video-title-text">${escapeHtml(title)}</span></div>
+      <span class="video-meta">${escapeHtml(reference)}</span>
+      <a class="source-link" href="${escapeAttr(item.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(sourceLabel)}</a>
+    </div>
+  `;
+}
+
+function formatSourceLabel(url) {
+  const value = String(url || "").trim();
+  if (!value) return "원본 링크 없음";
+
+  try {
+    const parsed = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    const host = parsed.hostname.replace(/^www\./, "");
+    const path = parsed.pathname.replace(/\/+$/, "");
+    return `${host}${path}`;
+  } catch {
+    return value;
+  }
 }
 
 function renderPlatform(platform) {

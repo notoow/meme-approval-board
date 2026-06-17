@@ -169,7 +169,6 @@ function refreshMetadata() {
       const original = rowToItem(headers, row);
       const item = normalizeItem(original, original.updatedBy);
       const before = JSON.stringify({
-        title: item.title,
         sourceUrl: item.sourceUrl,
         thumbnail: item.thumbnail,
         platform: item.platform,
@@ -178,7 +177,6 @@ function refreshMetadata() {
       enrichItemMetadata(item);
 
       const after = JSON.stringify({
-        title: item.title,
         sourceUrl: item.sourceUrl,
         thumbnail: item.thumbnail,
         platform: item.platform,
@@ -316,24 +314,11 @@ function enrichItemMetadata(item) {
 
   item.platform = item.platform || metadata.platform || inferPlatform(item.sourceUrl);
 
-  if (metadata.title && shouldReplaceTitle(item.title, item.platform)) {
-    item.title = metadata.title;
-  }
-
   if (metadata.thumbnail && !item.thumbnail) {
     item.thumbnail = metadata.thumbnail;
   }
 
   return item;
-}
-
-function shouldReplaceTitle(title, platform) {
-  const value = String(title || "").trim();
-  const currentPlatform = platform || "링크";
-  return !value ||
-    value === "링크 자동 등록" ||
-    value.indexOf(currentPlatform + " 링크 ") === 0 ||
-    value.indexOf(currentPlatform + " 쇼츠 ") === 0;
 }
 
 function fetchLinkMetadata(url) {
@@ -378,8 +363,17 @@ function fetchHtmlMetadata(url, platform) {
       getMetaContent(html, "property", "og:image"),
       getMetaContent(html, "name", "twitter:image"),
       getMetaContent(html, "property", "og:image:secure_url"),
+      getJsonStringValue(html, "thumbnail_url"),
+      getJsonStringValue(html, "thumbnail_src"),
+      getJsonStringValue(html, "display_url"),
     ]),
   };
+}
+
+function getJsonStringValue(text, key) {
+  const pattern = new RegExp('"' + key + '"\\s*:\\s*"([^"]+)"', "i");
+  const match = String(text || "").match(pattern);
+  return match ? decodeJsonString(match[1]) : "";
 }
 
 function fetchJson(url) {
@@ -457,6 +451,17 @@ function decodeHtml(value) {
     .replace(/&#([0-9]+);/g, function (_, code) {
       return String.fromCharCode(parseInt(code, 10));
     });
+}
+
+function decodeJsonString(value) {
+  try {
+    return JSON.parse('"' + String(value || "").replace(/"/g, '\\"') + '"');
+  } catch (error) {
+    return String(value || "")
+      .replace(/\\u0026/g, "&")
+      .replace(/\\\//g, "/")
+      .replace(/&amp;/g, "&");
+  }
 }
 
 function canonicalizeSourceUrl(url) {

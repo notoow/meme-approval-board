@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>밈 숏폼 제작 보드</title>
-    <link rel="stylesheet" href="./styles.css?v=20260617-4" />
+    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-5" />
+    <link rel="stylesheet" href="./styles.css?v=20260617-5" />
   </head>
   <body>
     <div class="app-shell">
@@ -42,6 +43,10 @@
                 rows="3"
                 placeholder="여기에 링크를 붙여넣으세요. 여러 개도 한 번에 가능합니다."
               ></textarea>
+            </label>
+            <label class="quick-note-box">
+              <span>제작 제목</span>
+              <input id="quickTitleInput" placeholder="예: 무영등 트랜지션" />
             </label>
             <label class="quick-note-box">
               <span>참고 메모</span>
@@ -135,7 +140,7 @@
         <input id="itemId" type="hidden" />
         <div class="form-grid">
           <label class="field span-2">
-            <span>제목</span>
+            <span>제작 제목</span>
             <input id="titleInput" name="title" required placeholder="예: 출근길 공감 밈" />
           </label>
           <label class="field span-2">
@@ -255,6 +260,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260617-4"></script>
+    <script src="./app.js?v=20260617-5"></script>
   </body>
 </html>
