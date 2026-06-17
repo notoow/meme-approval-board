@@ -574,6 +574,28 @@ h2 {
   color: var(--slate);
 }
 
+.status-select {
+  min-width: 168px;
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: var(--slate);
+  font-size: 14px;
+  font-weight: 900;
+  outline: 0;
+  cursor: pointer;
+}
+
+.status-select:focus {
+  box-shadow: 0 0 0 3px rgba(36, 99, 235, 0.15);
+}
+
+.status-select:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
 .platform-mark,
 .title-platform {
   display: inline-flex;
@@ -853,6 +875,11 @@ h2 {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.mobile-tags .status-select {
+  width: 100%;
+  max-width: 240px;
 }
 
 .mobile-actions {

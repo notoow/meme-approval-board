@@ -17,6 +17,18 @@ const STATUS_CLASS = {
   "보류": "status-hold",
 };
 
+const STATUS_OPTIONS = [
+  "촬영필요",
+  "촬영완료",
+  "작업중",
+  "수정중",
+  "수정완료",
+  "작업완료",
+  "컨펌대기",
+  "업로드완료",
+  "보류",
+];
+
 const APPROVAL_CLASS = {
   "미확인": "approval-pending",
   "승인": "approval-approved",
@@ -34,6 +46,7 @@ let activeFilter = "all";
 let searchQuery = "";
 let settings = applySharedSettings(loadSettings());
 let quickSaving = false;
+const statusSavingIds = new Set();
 let activePlayerItemId = "";
 let activePlayerVersionIndex = -1;
 
@@ -168,6 +181,8 @@ els.searchInput.addEventListener("input", (event) => {
 
 els.tableBody.addEventListener("click", handleListAction);
 els.mobileList.addEventListener("click", handleListAction);
+els.tableBody.addEventListener("change", handleStatusChange);
+els.mobileList.addEventListener("change", handleStatusChange);
 
 initializeQuickEntries();
 loadItems();
@@ -462,7 +477,7 @@ function renderTable(rows) {
               ${renderVideoInfo(item)}
             </div>
           </td>
-          <td>${renderStatus(item.status)}</td>
+          <td>${renderStatusControl(item)}</td>
           <td><span class="date-text">${escapeHtml(item.owner || "-")}</span></td>
           <td>${renderUploadDate(item.scheduleDate)}</td>
           <td>
@@ -490,7 +505,7 @@ function renderMobile(rows) {
             <div class="mobile-info">
               ${renderVideoInfo(item)}
               <div class="mobile-tags">
-                ${renderStatus(item.status)}
+                ${renderStatusControl(item)}
               </div>
               <span class="date-text">담당 ${escapeHtml(item.owner || "-")} · 업로드 ${escapeHtml(formatShortDate(item.scheduleDate))}</span>
             </div>
@@ -533,6 +548,48 @@ function handleListAction(event) {
   if (button.dataset.action === "play") {
     openPlayerDialog(item);
   }
+}
+
+async function handleStatusChange(event) {
+  const select = event.target.closest("[data-status-id]");
+  if (!select) return;
+
+  const item = items.find((row) => row.id === select.dataset.statusId);
+  if (!item) return;
+
+  const nextStatus = normalizeStatus(select.value);
+  const currentStatus = normalizeStatus(item.status);
+  if (nextStatus === currentStatus) return;
+
+  const original = { ...item };
+  const updated = {
+    ...item,
+    status: nextStatus,
+    approval: approvalAfterStatusChange(nextStatus, item.approval),
+    updatedAt: new Date().toISOString(),
+    updatedBy: settings.userName || item.updatedBy || "",
+  };
+
+  statusSavingIds.add(item.id);
+  upsertLocalItem(updated);
+  render();
+
+  const saved = await updateItem(updated, { silent: true });
+  statusSavingIds.delete(item.id);
+
+  if (!saved) {
+    upsertLocalItem(original);
+    alert("단계 변경 저장에 실패했습니다. 설정의 API URL과 비밀번호를 확인해 주세요.");
+  }
+
+  render();
+}
+
+function approvalAfterStatusChange(status, currentApproval) {
+  if (status === "수정중") return "수정요청";
+  if (["수정완료", "작업완료", "업로드완료"].includes(status)) return "승인";
+  if (currentApproval === "수정요청") return "미확인";
+  return currentApproval || "미확인";
 }
 
 function openItemDialog(item = null) {
@@ -1996,8 +2053,30 @@ function renderTrashIcon() {
 function renderStatus(status) {
   const label = normalizeStatus(status);
   const className = STATUS_CLASS[label] || "status-wait";
-  const displayLabel = label === "작업완료" ? "작업완료 / 업로드대기" : label;
+  const displayLabel = displayStatusLabel(label);
   return `<span class="status-badge ${className}">${escapeHtml(displayLabel)}</span>`;
+}
+
+function renderStatusControl(item) {
+  const label = normalizeStatus(item.status);
+  const className = STATUS_CLASS[label] || "status-wait";
+  const disabled = statusSavingIds.has(item.id) ? " disabled" : "";
+  const options = STATUS_OPTIONS
+    .map((status) => {
+      const selected = status === label ? " selected" : "";
+      return `<option value="${escapeAttr(status)}"${selected}>${escapeHtml(displayStatusLabel(status))}</option>`;
+    })
+    .join("");
+
+  return `
+    <select class="status-select ${className}" data-status-id="${escapeAttr(item.id)}" aria-label="${escapeAttr(item.title || "콘텐츠")} 단계 변경"${disabled}>
+      ${options}
+    </select>
+  `;
+}
+
+function displayStatusLabel(status) {
+  return status === "작업완료" ? "작업완료 / 업로드대기" : status;
 }
 
 function renderApproval(approval) {
