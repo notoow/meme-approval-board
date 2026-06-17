@@ -200,25 +200,18 @@ async function submitQuickLinks(event = {}) {
 
   quickSaving = true;
   els.quickAddButton.disabled = true;
-  setQuickStatus(`${entries.length}개 등록 중`);
+  setQuickStatus(`${entries.length}개 화면에 추가 중`);
 
-  let addedCount = 0;
-  for (const entry of entries) {
-    const item = await enrichItemMetadata(createQuickItem(entry.urls[0], entry.title, entry.reference));
-    const saved = await updateItem(item, { silent: true });
-    if (!saved) break;
-    addedCount += 1;
-  }
+  const newItems = entries.map((entry) => normalizeItem(createQuickItem(entry.urls[0], entry.title, entry.reference)));
+  items = [...newItems, ...items];
+  persistLocalFallback();
+  render();
+  resetQuickEntries();
 
+  setQuickStatus(`${newItems.length}개 추가됨, 시트 저장 중`);
   quickSaving = false;
   els.quickAddButton.disabled = false;
-
-  if (addedCount === entries.length) {
-    resetQuickEntries();
-    setQuickStatus(`${addedCount}개가 시트에 등록되었습니다`);
-  } else {
-    setQuickStatus(`${addedCount}개 등록 후 중단되었습니다`);
-  }
+  saveQuickItemsToServer(newItems);
 }
 
 function preventMultipleLinkPaste(event) {
@@ -292,7 +285,7 @@ function appendQuickEntry(values = {}) {
       <input data-field="link" type="url" placeholder="https://www.instagram.com/reel/..." value="${escapeAttr(values.link || "")}" />
     </label>
     <label class="quick-field">
-      <span>설명</span>
+      <span>설명 <em class="optional-label">선택</em></span>
       <input data-field="reference" placeholder="예: 이런 느낌으로 제작" value="${escapeAttr(values.reference || "")}" />
     </label>
     <button class="quick-remove-button" data-quick-action="remove" type="button" aria-label="입력 줄 삭제">×</button>
@@ -348,6 +341,38 @@ function collectQuickEntries() {
 
 function focusQuickField(row, field) {
   getQuickField(row, field)?.focus();
+}
+
+async function saveQuickItemsToServer(newItems) {
+  setSaveState("시트 저장 중");
+
+  let savedCount = 0;
+  for (const item of newItems) {
+    try {
+      const savedItem = await saveItemToServer(item);
+      savedCount += 1;
+
+      if (items.some((row) => row.id === item.id)) {
+        upsertLocalItem(savedItem);
+      }
+    } catch (error) {
+      console.error(error);
+      break;
+    }
+  }
+
+  persistLocalFallback();
+  render();
+
+  if (savedCount === newItems.length) {
+    setSaveState("저장됨");
+    setQuickStatus(`${savedCount}개 시트 저장 완료`);
+    refreshMissingMetadata();
+    return;
+  }
+
+  setSaveState("일부 저장 실패");
+  setQuickStatus(`${savedCount}개 저장됨, 실패 항목은 화면에 남겨뒀습니다`);
 }
 
 function render() {
@@ -524,20 +549,8 @@ async function updateItem(item, options = {}) {
   setSaveState("저장 중");
 
   try {
-    if (hasApiSettings()) {
-      const response = await requestApi("upsert", { item });
-      if (response.item) {
-        item = response.item;
-      }
-    }
-
-    const index = items.findIndex((row) => row.id === item.id);
-    if (index >= 0) {
-      items[index] = normalizeItem(item);
-    } else {
-      items.unshift(normalizeItem(item));
-    }
-    persistLocalFallback();
+    item = await saveItemToServer(item);
+    upsertLocalItem(item);
     setSaveState("저장됨");
   } catch (error) {
     console.error(error);
@@ -553,6 +566,25 @@ async function updateItem(item, options = {}) {
   return true;
 }
 
+async function saveItemToServer(item) {
+  if (!hasApiSettings()) return normalizeItem(item);
+
+  const response = await requestApi("upsert", { item });
+  return normalizeItem(response.item || item);
+}
+
+function upsertLocalItem(item) {
+  const normalized = normalizeItem(item);
+  const index = items.findIndex((row) => row.id === normalized.id);
+  if (index >= 0) {
+    items[index] = normalized;
+  } else {
+    items.unshift(normalized);
+  }
+  persistLocalFallback();
+  return normalized;
+}
+
 async function deleteCurrentItem() {
   const id = form.id.value;
   if (!id) return;
@@ -564,25 +596,32 @@ async function deleteItemById(id, options = {}) {
   const title = item?.title ? ` "${item.title}"` : "";
   if (!confirm(`이 콘텐츠${title}를 삭제할까요?`)) return;
 
+  const previousItems = [...items];
+  const removedItem = item;
+
+  items = items.filter((row) => row.id !== id);
+  persistLocalFallback();
+  render();
   setSaveState("삭제 중");
+  if (options.closeDialog) {
+    els.itemDialog.close();
+  }
 
   try {
     if (hasApiSettings()) {
       await requestApi("delete", { id });
     }
-    items = items.filter((item) => item.id !== id);
-    persistLocalFallback();
     setSaveState("삭제됨");
-    if (options.closeDialog) {
-      els.itemDialog.close();
-    }
   } catch (error) {
     console.error(error);
+    if (removedItem) {
+      items = previousItems;
+      persistLocalFallback();
+      render();
+    }
     setSaveState("삭제 실패");
     alert("삭제에 실패했습니다. 설정의 API URL과 비밀번호를 확인해 주세요.");
   }
-
-  render();
 }
 
 async function requestApi(action, payload = {}) {

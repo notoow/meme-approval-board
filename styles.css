@@ -226,6 +226,14 @@ h2 {
   font-weight: 900;
 }
 
+.optional-label {
+  margin-left: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .quick-link-box,
 .quick-note-box {
   display: grid;
