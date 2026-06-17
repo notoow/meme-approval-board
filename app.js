@@ -29,7 +29,6 @@ let items = [];
 let activeFilter = "all";
 let searchQuery = "";
 let settings = applySharedSettings(loadSettings());
-let quickPasteTimer = null;
 let quickSaving = false;
 
 const els = {
@@ -52,6 +51,8 @@ const els = {
   apiUrlInput: document.querySelector("#apiUrlInput"),
   apiSecretInput: document.querySelector("#apiSecretInput"),
   userNameInput: document.querySelector("#userNameInput"),
+  createShareLinkButton: document.querySelector("#createShareLinkButton"),
+  shareLinkStatus: document.querySelector("#shareLinkStatus"),
   deleteButton: document.querySelector("#deleteButton"),
   quickAddForm: document.querySelector("#quickAddForm"),
   quickLinkInput: document.querySelector("#quickLinkInput"),
@@ -86,15 +87,9 @@ document.querySelector("#saveItemButton").addEventListener("click", saveItemFrom
 document.querySelector("#deleteButton").addEventListener("click", deleteCurrentItem);
 document.querySelector("#saveSettingsButton").addEventListener("click", saveSettingsFromDialog);
 document.querySelector("#clearSettingsButton").addEventListener("click", clearSettings);
+els.createShareLinkButton.addEventListener("click", createSettingsShareLink);
 els.quickAddForm.addEventListener("submit", submitQuickLinks);
-els.quickLinkInput.addEventListener("paste", () => {
-  clearTimeout(quickPasteTimer);
-  quickPasteTimer = setTimeout(() => {
-    if (extractUrls(els.quickLinkInput.value).length > 0) {
-      submitQuickLinks({ auto: true });
-    }
-  }, 500);
-});
+els.quickLinkInput.addEventListener("paste", preventMultipleLinkPaste);
 
 els.filterTabs.addEventListener("click", (event) => {
   const button = event.target.closest("[data-filter]");
@@ -155,9 +150,23 @@ async function submitQuickLinks(event = {}) {
   event.preventDefault?.();
   if (quickSaving) return;
 
+  const title = els.quickTitleInput.value.trim();
   const urls = extractUrls(els.quickLinkInput.value);
+
+  if (!title) {
+    setQuickStatus("제작 제목을 입력해 주세요");
+    els.quickTitleInput.focus();
+    return;
+  }
+
   if (urls.length === 0) {
     setQuickStatus("등록할 링크가 없습니다");
+    els.quickLinkInput.focus();
+    return;
+  }
+
+  if (urls.length > 1) {
+    setQuickStatus("한 번에 링크 1개만 등록할 수 있습니다");
     return;
   }
 
@@ -167,21 +176,10 @@ async function submitQuickLinks(event = {}) {
     return;
   }
 
+  const url = urls[0];
   const existingKeys = new Set(items.map((item) => normalizeUrlKey(item.sourceUrl)));
-  const uniqueUrls = [];
-  let duplicateCount = 0;
-
-  urls.forEach((url) => {
-    const key = normalizeUrlKey(url);
-    if (!key || existingKeys.has(key)) {
-      duplicateCount += 1;
-      return;
-    }
-    existingKeys.add(key);
-    uniqueUrls.push(url);
-  });
-
-  if (uniqueUrls.length === 0) {
+  const key = normalizeUrlKey(url);
+  if (!key || existingKeys.has(key)) {
     setQuickStatus("이미 등록된 링크입니다");
     els.quickLinkInput.value = "";
     return;
@@ -189,31 +187,30 @@ async function submitQuickLinks(event = {}) {
 
   quickSaving = true;
   els.quickAddButton.disabled = true;
-  setQuickStatus(`${uniqueUrls.length}개 등록 중`);
+  setQuickStatus("등록 중");
 
-  let addedCount = 0;
-  const title = els.quickTitleInput.value.trim();
   const reference = els.quickReferenceInput.value.trim();
-
-  for (const [index, url] of uniqueUrls.entries()) {
-    const item = await enrichItemMetadata(createQuickItem(url, title, reference, index, uniqueUrls.length));
-    const saved = await updateItem(item, { silent: true });
-    if (!saved) break;
-    addedCount += 1;
-  }
+  const item = await enrichItemMetadata(createQuickItem(url, title, reference));
+  const saved = await updateItem(item, { silent: true });
 
   quickSaving = false;
   els.quickAddButton.disabled = false;
 
-  if (addedCount > 0) {
+  if (saved) {
     els.quickLinkInput.value = "";
     els.quickTitleInput.value = "";
     els.quickReferenceInput.value = "";
-    const duplicateText = duplicateCount ? `, 중복 ${duplicateCount}개 제외` : "";
-    setQuickStatus(`${addedCount}개가 시트에 등록되었습니다${duplicateText}`);
+    setQuickStatus("시트에 등록되었습니다");
   } else {
     setQuickStatus("등록에 실패했습니다");
   }
+}
+
+function preventMultipleLinkPaste(event) {
+  const text = event.clipboardData?.getData("text") || "";
+  if (extractUrls(text).length <= 1) return;
+  event.preventDefault();
+  setQuickStatus("한 번에 링크 1개만 붙여넣을 수 있습니다");
 }
 
 function render() {
@@ -252,6 +249,7 @@ function renderTable(rows) {
               <button class="row-button approve" type="button" data-action="approve" data-id="${escapeAttr(item.id)}">승인</button>
               <button class="row-button revise" type="button" data-action="revise" data-id="${escapeAttr(item.id)}">수정</button>
               <button class="row-button" type="button" data-action="edit" data-id="${escapeAttr(item.id)}">열기</button>
+              <button class="row-button delete" type="button" data-action="delete" data-id="${escapeAttr(item.id)}" aria-label="삭제" title="삭제">${renderTrashIcon()}</button>
             </div>
           </td>
         </tr>
@@ -280,6 +278,7 @@ function renderMobile(rows) {
             <button class="row-button approve" type="button" data-action="approve" data-id="${escapeAttr(item.id)}">승인</button>
             <button class="row-button revise" type="button" data-action="revise" data-id="${escapeAttr(item.id)}">수정</button>
             <button class="row-button" type="button" data-action="edit" data-id="${escapeAttr(item.id)}">열기</button>
+            <button class="row-button delete" type="button" data-action="delete" data-id="${escapeAttr(item.id)}" aria-label="삭제" title="삭제">${renderTrashIcon()}</button>
           </div>
         </article>
       `;
@@ -296,6 +295,11 @@ function handleListAction(event) {
 
   if (button.dataset.action === "edit") {
     openItemDialog(item);
+    return;
+  }
+
+  if (button.dataset.action === "delete") {
+    deleteItemById(item.id);
     return;
   }
 
@@ -415,7 +419,13 @@ async function updateItem(item, options = {}) {
 async function deleteCurrentItem() {
   const id = form.id.value;
   if (!id) return;
-  if (!confirm("이 콘텐츠를 삭제할까요?")) return;
+  await deleteItemById(id, { closeDialog: true });
+}
+
+async function deleteItemById(id, options = {}) {
+  const item = items.find((row) => row.id === id);
+  const title = item?.title ? ` "${item.title}"` : "";
+  if (!confirm(`이 콘텐츠${title}를 삭제할까요?`)) return;
 
   setSaveState("삭제 중");
 
@@ -426,7 +436,9 @@ async function deleteCurrentItem() {
     items = items.filter((item) => item.id !== id);
     persistLocalFallback();
     setSaveState("삭제됨");
-    els.itemDialog.close();
+    if (options.closeDialog) {
+      els.itemDialog.close();
+    }
   } catch (error) {
     console.error(error);
     setSaveState("삭제 실패");
@@ -519,6 +531,7 @@ function openSettings() {
   els.apiUrlInput.value = settings.apiUrl || "";
   els.apiSecretInput.value = settings.apiSecret || "";
   els.userNameInput.value = settings.userName || "";
+  els.shareLinkStatus.textContent = "담당자 이름까지 포함해서 복사됩니다";
   els.settingsDialog.showModal();
 }
 
@@ -531,6 +544,50 @@ async function saveSettingsFromDialog() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   els.settingsDialog.close();
   await loadItems();
+}
+
+async function createSettingsShareLink() {
+  const apiUrl = els.apiUrlInput.value.trim();
+  const apiSecret = els.apiSecretInput.value.trim();
+  const userName = els.userNameInput.value.trim();
+
+  if (!apiUrl || !apiSecret || !userName) {
+    els.shareLinkStatus.textContent = "URL, 비밀번호, 담당자 이름을 모두 입력해 주세요";
+    return;
+  }
+
+  const shareUrl = new URL(window.location.href);
+  shareUrl.hash = new URLSearchParams({
+    apiUrl,
+    apiSecret,
+    userName,
+  }).toString();
+
+  const copied = await copyText(shareUrl.toString());
+  els.shareLinkStatus.textContent = copied ? "공유 링크가 복사되었습니다" : shareUrl.toString();
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } catch {
+      copied = false;
+    }
+    textarea.remove();
+    return copied;
+  }
 }
 
 function clearSettings() {
@@ -785,12 +842,12 @@ function createId() {
   return `meme_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
 }
 
-function createQuickItem(url, title, reference, index, total) {
+function createQuickItem(url, title, reference) {
   const sourceUrl = canonicalizeSourceUrl(url);
   const platform = inferPlatform(sourceUrl);
   return {
     id: createId(),
-    title: createQuickTitle(sourceUrl, platform, index, total, title),
+    title: createQuickTitle(sourceUrl, platform, title),
     sourceUrl,
     thumbnail: youtubeThumbnail(sourceUrl),
     platform,
@@ -808,10 +865,10 @@ function createQuickItem(url, title, reference, index, total) {
   };
 }
 
-function createQuickTitle(url, platform, index, total, title = "") {
+function createQuickTitle(url, platform, title = "") {
   const cleanTitle = String(title || "").trim();
   if (cleanTitle) {
-    return total > 1 ? `${cleanTitle} ${index + 1}` : cleanTitle;
+    return cleanTitle;
   }
 
   const now = new Date();
@@ -821,8 +878,7 @@ function createQuickTitle(url, platform, index, total, title = "") {
     hour: "2-digit",
     minute: "2-digit",
   }).format(now);
-  const suffix = total > 1 ? ` ${index + 1}` : "";
-  return `제작 제목 미정 ${dateText}${suffix}`;
+  return `제작 제목 미정 ${dateText}`;
 }
 
 function extractUrls(text) {
@@ -928,6 +984,18 @@ function renderPlatformLogo(platform, className) {
     return `<span class="${className}">URL</span>`;
   }
   return `<span class="${className}"><img src="${escapeAttr(logo)}" alt="${escapeAttr(platform)}" loading="lazy" /></span>`;
+}
+
+function renderTrashIcon() {
+  return `
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none">
+      <path d="M4 7h16" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M6 7l1 14h10l1-14" />
+      <path d="M9 7V4h6v3" />
+    </svg>
+  `;
 }
 
 function renderStatus(status) {

@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>밈 숏폼 제작 보드</title>
-    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-6" />
-    <link rel="stylesheet" href="./styles.css?v=20260617-6" />
+    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-7" />
+    <link rel="stylesheet" href="./styles.css?v=20260617-7" />
   </head>
   <body>
     <div class="app-shell">
@@ -33,27 +33,23 @@
         <section class="quick-add" aria-label="빠른 링크 등록">
           <div class="quick-add-copy">
             <p class="eyebrow">빠른 등록</p>
-            <h2>링크를 붙여넣으면 시트에 바로 추가됩니다</h2>
+            <h2>제목과 링크를 하나씩 등록합니다</h2>
           </div>
           <form class="quick-add-form" id="quickAddForm">
-            <label class="quick-link-box">
-              <span>인스타, 유튜브, 틱톡 링크</span>
-              <textarea
-                id="quickLinkInput"
-                rows="3"
-                placeholder="여기에 링크를 붙여넣으세요. 여러 개도 한 번에 가능합니다."
-              ></textarea>
-            </label>
             <label class="quick-note-box">
               <span>제작 제목</span>
-              <input id="quickTitleInput" placeholder="예: 무영등 트랜지션" />
+              <input id="quickTitleInput" required placeholder="예: 무영등 트랜지션" />
+            </label>
+            <label class="quick-link-box">
+              <span>인스타, 유튜브, 틱톡 링크</span>
+              <input id="quickLinkInput" type="url" required placeholder="https://www.instagram.com/reel/..." />
             </label>
             <label class="quick-note-box">
-              <span>참고 메모</span>
+              <span>설명</span>
               <input id="quickReferenceInput" placeholder="예: 이런 느낌으로 제작" />
             </label>
             <div class="quick-add-actions">
-              <div class="quick-status" id="quickStatus" role="status">붙여넣기 대기 중</div>
+              <div class="quick-status" id="quickStatus" role="status">제목과 링크 입력 대기 중</div>
               <button class="primary-button" id="quickAddButton" type="submit">시트에 등록</button>
             </div>
           </form>
@@ -245,9 +241,14 @@
             <input id="apiSecretInput" type="password" placeholder="설정한 비밀번호" />
           </label>
           <label class="field">
-            <span>내 이름</span>
+            <span>담당자 이름</span>
             <input id="userNameInput" placeholder="예: 김대표" />
           </label>
+        </div>
+
+        <div class="settings-share">
+          <button class="secondary-button" id="createShareLinkButton" type="button">공유 링크 만들기</button>
+          <span id="shareLinkStatus" role="status">담당자 이름까지 포함해서 복사됩니다</span>
         </div>
 
         <div class="modal-actions">
@@ -259,6 +260,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260617-6"></script>
+    <script src="./app.js?v=20260617-7"></script>
   </body>
 </html>

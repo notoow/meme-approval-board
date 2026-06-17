@@ -202,7 +202,7 @@ h2 {
   font-weight: 900;
 }
 
-.quick-link-box textarea,
+.quick-link-box input,
 .quick-note-box input {
   width: 100%;
   border: 1px solid var(--line-strong);
@@ -212,19 +212,13 @@ h2 {
   outline: 0;
 }
 
-.quick-link-box textarea {
-  min-height: 112px;
-  resize: vertical;
-  padding: 14px;
-  font-size: 18px;
-}
-
+.quick-link-box input,
 .quick-note-box input {
   height: 48px;
   padding: 0 14px;
 }
 
-.quick-link-box textarea:focus,
+.quick-link-box input:focus,
 .quick-note-box input:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(36, 99, 235, 0.12);
@@ -600,7 +594,7 @@ h2 {
   display: flex;
   flex-wrap: nowrap;
   gap: 8px;
-  min-width: 190px;
+  min-width: 238px;
 }
 
 .row-button {
@@ -621,6 +615,23 @@ h2 {
   background: var(--red-soft);
   border-color: #ffc5bd;
   color: var(--red);
+}
+
+.row-button.delete {
+  width: 38px;
+  padding: 0;
+  background: #ffffff;
+  border-color: #ffc5bd;
+  color: var(--red);
+}
+
+.row-button.delete svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 0 auto;
+  stroke: currentColor;
+  stroke-width: 2.2;
 }
 
 .mobile-list {
@@ -653,7 +664,7 @@ h2 {
 
 .mobile-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   margin-top: 14px;
 }
@@ -766,6 +777,26 @@ h2 {
   margin: 0;
 }
 
+.settings-share {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 14px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.settings-share span {
+  overflow: hidden;
+  color: var(--muted);
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 [hidden] {
   display: none !important;
 }
@@ -852,7 +883,8 @@ h2 {
 
   .form-grid,
   .modal-actions,
-  .quick-add-actions {
+  .quick-add-actions,
+  .settings-share {
     grid-template-columns: 1fr;
   }
 
@@ -881,7 +913,7 @@ h2 {
   }
 
   .mobile-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
