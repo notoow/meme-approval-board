@@ -21,7 +21,9 @@ const APPROVAL_CLASS = {
 let items = [];
 let activeFilter = "all";
 let searchQuery = "";
-let settings = loadSettings();
+let settings = applySharedSettings(loadSettings());
+let quickPasteTimer = null;
+let quickSaving = false;
 
 const els = {
   setupNotice: document.querySelector("#setupNotice"),
@@ -44,6 +46,11 @@ const els = {
   apiSecretInput: document.querySelector("#apiSecretInput"),
   userNameInput: document.querySelector("#userNameInput"),
   deleteButton: document.querySelector("#deleteButton"),
+  quickAddForm: document.querySelector("#quickAddForm"),
+  quickLinkInput: document.querySelector("#quickLinkInput"),
+  quickReferenceInput: document.querySelector("#quickReferenceInput"),
+  quickStatus: document.querySelector("#quickStatus"),
+  quickAddButton: document.querySelector("#quickAddButton"),
 };
 
 const form = {
@@ -71,6 +78,15 @@ document.querySelector("#saveItemButton").addEventListener("click", saveItemFrom
 document.querySelector("#deleteButton").addEventListener("click", deleteCurrentItem);
 document.querySelector("#saveSettingsButton").addEventListener("click", saveSettingsFromDialog);
 document.querySelector("#clearSettingsButton").addEventListener("click", clearSettings);
+els.quickAddForm.addEventListener("submit", submitQuickLinks);
+els.quickLinkInput.addEventListener("paste", () => {
+  clearTimeout(quickPasteTimer);
+  quickPasteTimer = setTimeout(() => {
+    if (extractUrls(els.quickLinkInput.value).length > 0) {
+      submitQuickLinks({ auto: true });
+    }
+  }, 500);
+});
 
 els.filterTabs.addEventListener("click", (event) => {
   const button = event.target.closest("[data-filter]");
@@ -124,6 +140,69 @@ async function loadLocalItems() {
   const data = await response.json();
   localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(data.items));
   return normalizeItems(data.items);
+}
+
+async function submitQuickLinks(event = {}) {
+  event.preventDefault?.();
+  if (quickSaving) return;
+
+  const urls = extractUrls(els.quickLinkInput.value);
+  if (urls.length === 0) {
+    setQuickStatus("등록할 링크가 없습니다");
+    return;
+  }
+
+  if (!hasApiSettings()) {
+    setQuickStatus("먼저 Google Sheets 연결 설정이 필요합니다");
+    openSettings();
+    return;
+  }
+
+  const existingKeys = new Set(items.map((item) => normalizeUrlKey(item.sourceUrl)));
+  const uniqueUrls = [];
+  let duplicateCount = 0;
+
+  urls.forEach((url) => {
+    const key = normalizeUrlKey(url);
+    if (!key || existingKeys.has(key)) {
+      duplicateCount += 1;
+      return;
+    }
+    existingKeys.add(key);
+    uniqueUrls.push(url);
+  });
+
+  if (uniqueUrls.length === 0) {
+    setQuickStatus("이미 등록된 링크입니다");
+    els.quickLinkInput.value = "";
+    return;
+  }
+
+  quickSaving = true;
+  els.quickAddButton.disabled = true;
+  setQuickStatus(`${uniqueUrls.length}개 등록 중`);
+
+  let addedCount = 0;
+  const reference = els.quickReferenceInput.value.trim();
+
+  for (const [index, url] of uniqueUrls.entries()) {
+    const item = createQuickItem(url, reference, index, uniqueUrls.length);
+    const saved = await updateItem(item, { silent: true });
+    if (!saved) break;
+    addedCount += 1;
+  }
+
+  quickSaving = false;
+  els.quickAddButton.disabled = false;
+
+  if (addedCount > 0) {
+    els.quickLinkInput.value = "";
+    els.quickReferenceInput.value = "";
+    const duplicateText = duplicateCount ? `, 중복 ${duplicateCount}개 제외` : "";
+    setQuickStatus(`${addedCount}개가 시트에 등록되었습니다${duplicateText}`);
+  } else {
+    setQuickStatus("등록에 실패했습니다");
+  }
 }
 
 function render() {
@@ -294,7 +373,7 @@ async function saveItemFromForm() {
   els.itemDialog.close();
 }
 
-async function updateItem(item) {
+async function updateItem(item, options = {}) {
   setSaveState("저장 중");
 
   try {
@@ -313,10 +392,15 @@ async function updateItem(item) {
   } catch (error) {
     console.error(error);
     setSaveState("저장 실패");
-    alert("저장에 실패했습니다. 설정의 API URL과 비밀번호를 확인해 주세요.");
+    if (!options.silent) {
+      alert("저장에 실패했습니다. 설정의 API URL과 비밀번호를 확인해 주세요.");
+    }
+    render();
+    return false;
   }
 
   render();
+  return true;
 }
 
 async function deleteCurrentItem() {
@@ -344,28 +428,82 @@ async function deleteCurrentItem() {
 }
 
 async function requestApi(action, payload = {}) {
-  const response = await fetch(settings.apiUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8",
-    },
-    body: JSON.stringify({
-      action,
-      secret: settings.apiSecret,
-      userName: settings.userName || "",
-      ...payload,
-    }),
-  });
+  const requestPayload = {
+    action,
+    secret: settings.apiSecret,
+    userName: settings.userName || "",
+    ...payload,
+  };
 
-  if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
+  let response;
+  try {
+    response = await fetch(settings.apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify(requestPayload),
+    });
+  } catch (error) {
+    return requestApiJsonp(requestPayload, error);
   }
 
-  const data = await response.json();
+  if (!response.ok) {
+    return requestApiJsonp(requestPayload, new Error(`API request failed: ${response.status}`));
+  }
+
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    return requestApiJsonp(requestPayload, error);
+  }
+
   if (!data.ok) {
     throw new Error(data.error || "Unknown API error");
   }
   return data;
+}
+
+function requestApiJsonp(payload, originalError) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `memeBoardJsonp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const script = document.createElement("script");
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(originalError || new Error("API request timed out"));
+    }, 15000);
+
+    function cleanup() {
+      window.clearTimeout(timeout);
+      delete window[callbackName];
+      script.remove();
+    }
+
+    window[callbackName] = (data) => {
+      cleanup();
+      if (!data || !data.ok) {
+        reject(new Error(data?.error || "Unknown API error"));
+        return;
+      }
+      resolve(data);
+    };
+
+    try {
+      const url = new URL(settings.apiUrl);
+      url.searchParams.set("callback", callbackName);
+      url.searchParams.set("payload", JSON.stringify(payload));
+      script.src = url.toString();
+      script.onerror = () => {
+        cleanup();
+        reject(originalError || new Error("API request failed"));
+      };
+      document.head.appendChild(script);
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
+  });
 }
 
 function openSettings() {
@@ -400,6 +538,25 @@ function loadSettings() {
   } catch {
     return {};
   }
+}
+
+function applySharedSettings(saved) {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const apiUrl = params.get("apiUrl") || params.get("api");
+  const apiSecret = params.get("apiSecret") || params.get("secret");
+  const userName = params.get("userName") || params.get("user");
+
+  if (!apiUrl && !apiSecret && !userName) return saved;
+
+  const next = {
+    ...saved,
+    apiUrl: apiUrl || saved.apiUrl || "",
+    apiSecret: apiSecret || saved.apiSecret || "",
+    userName: userName || saved.userName || "",
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  return next;
 }
 
 function hasApiSettings() {
@@ -496,6 +653,78 @@ function createId() {
   return `meme_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
 }
 
+function createQuickItem(url, reference, index, total) {
+  const platform = inferPlatform(url);
+  return {
+    id: createId(),
+    title: createQuickTitle(url, platform, index, total),
+    sourceUrl: url,
+    thumbnail: youtubeThumbnail(url),
+    platform,
+    reference: reference || "링크 자동 등록",
+    owner: settings.userName || "",
+    status: "제작대기",
+    draftUrl: "",
+    approval: "미확인",
+    feedback: "",
+    dueDate: "",
+    scheduleDate: "",
+    uploadUrl: "",
+    updatedAt: new Date().toISOString(),
+    updatedBy: settings.userName || "",
+  };
+}
+
+function createQuickTitle(url, platform, index, total) {
+  const now = new Date();
+  const dateText = new Intl.DateTimeFormat("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(now);
+  const type = platform === "유튜브" && String(url).includes("/shorts/") ? "쇼츠" : "링크";
+  const suffix = total > 1 ? ` ${index + 1}` : "";
+  return `${platform} ${type} ${dateText}${suffix}`;
+}
+
+function extractUrls(text) {
+  const pattern = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|youtube\.com|youtu\.be|tiktok\.com)\/[^\s<>"']+/gi;
+  const matches = String(text || "").match(pattern) || [];
+  const seen = new Set();
+  const urls = [];
+
+  matches.forEach((rawUrl) => {
+    let url = rawUrl.trim().replace(/[),.;\]}]+$/, "");
+    if (!/^https?:\/\//i.test(url)) {
+      url = `https://${url}`;
+    }
+    const key = normalizeUrlKey(url);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    urls.push(url);
+  });
+
+  return urls;
+}
+
+function normalizeUrlKey(url) {
+  const value = String(url || "").trim();
+  if (!value) return "";
+
+  const youtubeId = youtubeVideoId(value);
+  if (youtubeId) return `youtube:${youtubeId}`;
+
+  try {
+    const parsed = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    parsed.hash = "";
+    parsed.search = "";
+    return `${parsed.hostname.replace(/^www\./, "")}${parsed.pathname}`.replace(/\/+$/, "").toLowerCase();
+  } catch {
+    return value.replace(/\/+$/, "").toLowerCase();
+  }
+}
+
 function renderThumb(item) {
   const imageUrl = item.thumbnail || youtubeThumbnail(item.sourceUrl);
   if (imageUrl) {
@@ -583,6 +812,11 @@ function platformInitial(platform) {
 }
 
 function youtubeThumbnail(url) {
+  const videoId = youtubeVideoId(url);
+  return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : "";
+}
+
+function youtubeVideoId(url) {
   const value = String(url || "");
   const patterns = [
     /youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/,
@@ -591,13 +825,17 @@ function youtubeThumbnail(url) {
   ];
   for (const pattern of patterns) {
     const match = value.match(pattern);
-    if (match) return `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`;
+    if (match) return match[1];
   }
   return "";
 }
 
 function setSaveState(message) {
   els.saveState.textContent = message;
+}
+
+function setQuickStatus(message) {
+  els.quickStatus.textContent = message;
 }
 
 function escapeHtml(value) {

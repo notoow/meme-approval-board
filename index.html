@@ -29,6 +29,31 @@
       </section>
 
       <main>
+        <section class="quick-add" aria-label="빠른 링크 등록">
+          <div class="quick-add-copy">
+            <p class="eyebrow">빠른 등록</p>
+            <h2>링크를 붙여넣으면 시트에 바로 추가됩니다</h2>
+          </div>
+          <form class="quick-add-form" id="quickAddForm">
+            <label class="quick-link-box">
+              <span>인스타, 유튜브, 틱톡 링크</span>
+              <textarea
+                id="quickLinkInput"
+                rows="3"
+                placeholder="여기에 링크를 붙여넣으세요. 여러 개도 한 번에 가능합니다."
+              ></textarea>
+            </label>
+            <label class="quick-note-box">
+              <span>참고 메모</span>
+              <input id="quickReferenceInput" placeholder="예: 이런 느낌으로 제작" />
+            </label>
+            <div class="quick-add-actions">
+              <div class="quick-status" id="quickStatus" role="status">붙여넣기 대기 중</div>
+              <button class="primary-button" id="quickAddButton" type="submit">시트에 등록</button>
+            </div>
+          </form>
+        </section>
+
         <section class="summary-grid" aria-label="요약">
           <article class="summary-box">
             <span>컨펌 대기</span>
@@ -202,7 +227,7 @@
 
         <div class="settings-copy">
           <p>Apps Script 배포 URL과 비밀번호를 입력하면 이 브라우저에서 저장됩니다.</p>
-          <p>비밀번호는 repo에 저장되지 않고, 각 사용자 브라우저에만 저장됩니다.</p>
+          <p>한 번 저장하면 이후에는 링크만 붙여넣어도 Google Sheet에 바로 등록됩니다.</p>
         </div>
 
         <div class="form-grid">

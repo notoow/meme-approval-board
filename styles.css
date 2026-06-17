@@ -169,6 +169,85 @@ h2 {
   color: #604500;
 }
 
+.quick-add {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 18px;
+  padding: 20px;
+  background: var(--panel);
+  border: 2px solid var(--blue);
+  border-radius: 8px;
+}
+
+.quick-add-copy h2 {
+  max-width: 12em;
+}
+
+.quick-add-form {
+  display: grid;
+  gap: 12px;
+}
+
+.quick-link-box,
+.quick-note-box {
+  display: grid;
+  gap: 8px;
+}
+
+.quick-link-box span,
+.quick-note-box span {
+  color: var(--slate);
+  font-weight: 900;
+}
+
+.quick-link-box textarea,
+.quick-note-box input {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  outline: 0;
+}
+
+.quick-link-box textarea {
+  min-height: 112px;
+  resize: vertical;
+  padding: 14px;
+  font-size: 18px;
+}
+
+.quick-note-box input {
+  height: 48px;
+  padding: 0 14px;
+}
+
+.quick-link-box textarea:focus,
+.quick-note-box input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(36, 99, 235, 0.12);
+}
+
+.quick-add-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.quick-status {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  background: var(--soft);
+  border-radius: 8px;
+  color: var(--slate);
+  font-weight: 800;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -588,9 +667,19 @@ h2 {
 
   .topbar,
   .toolbar,
-  .notice {
+  .notice,
+  .quick-add {
     align-items: stretch;
+  }
+
+  .topbar,
+  .toolbar,
+  .notice {
     flex-direction: column;
+  }
+
+  .quick-add {
+    grid-template-columns: 1fr;
   }
 
   .topbar-actions {
@@ -652,7 +741,8 @@ h2 {
   }
 
   .form-grid,
-  .modal-actions {
+  .modal-actions,
+  .quick-add-actions {
     grid-template-columns: 1fr;
   }
 

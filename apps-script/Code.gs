@@ -24,26 +24,43 @@ const COLUMNS = [
 function doPost(e) {
   try {
     const input = JSON.parse((e.postData && e.postData.contents) || "{}");
-    checkSecret(input.secret);
-
-    if (input.action === "list") {
-      return jsonOutput({ ok: true, items: listItems() });
-    }
-
-    if (input.action === "upsert") {
-      const item = upsertItem(input.item, input.userName);
-      return jsonOutput({ ok: true, item });
-    }
-
-    if (input.action === "delete") {
-      deleteItem(input.id);
-      return jsonOutput({ ok: true });
-    }
-
-    throw new Error("Unknown action: " + input.action);
+    return jsonOutput(handleAction(input));
   } catch (error) {
     return jsonOutput({ ok: false, error: error.message });
   }
+}
+
+function doGet(e) {
+  const callback = e && e.parameter && e.parameter.callback;
+
+  try {
+    const input = e && e.parameter && e.parameter.payload
+      ? JSON.parse(e.parameter.payload)
+      : (e && e.parameter) || {};
+    return jsonOutput(handleAction(input), callback);
+  } catch (error) {
+    return jsonOutput({ ok: false, error: error.message }, callback);
+  }
+}
+
+function handleAction(input) {
+  checkSecret(input.secret);
+
+  if (input.action === "list") {
+    return { ok: true, items: listItems() };
+  }
+
+  if (input.action === "upsert") {
+    const item = upsertItem(input.item, input.userName);
+    return { ok: true, item };
+  }
+
+  if (input.action === "delete") {
+    deleteItem(input.id);
+    return { ok: true };
+  }
+
+  throw new Error("Unknown action: " + input.action);
 }
 
 function setupSheet() {
@@ -241,9 +258,21 @@ function checkSecret(secret) {
   }
 }
 
-function jsonOutput(payload) {
+function jsonOutput(payload, callback) {
+  const json = JSON.stringify(payload);
+  if (callback) {
+    if (!/^[a-zA-Z_$][0-9a-zA-Z_$]*$/.test(callback)) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: "잘못된 callback 이름입니다." }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService
+      .createTextOutput(callback + "(" + json + ");")
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
   return ContentService
-    .createTextOutput(JSON.stringify(payload))
+    .createTextOutput(json)
     .setMimeType(ContentService.MimeType.JSON);
 }
 
