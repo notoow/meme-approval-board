@@ -117,6 +117,7 @@ async function loadItems() {
     if (hasApiSettings()) {
       const response = await requestApi("list");
       items = normalizeItems(response.items || []);
+      refreshMissingMetadata();
     } else {
       items = await loadLocalItems();
     }
@@ -231,7 +232,7 @@ function renderTable(rows) {
             <div class="video-cell">
               ${renderThumb(item)}
               <div>
-                <a class="video-title" href="${escapeAttr(item.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+                <a class="video-title" href="${escapeAttr(item.sourceUrl)}" target="_blank" rel="noreferrer">${renderTitlePlatform(item.platform)}${escapeHtml(item.title)}</a>
                 <span class="video-meta">${escapeHtml(item.reference || "참고 포인트 없음")}</span>
               </div>
             </div>
@@ -262,7 +263,7 @@ function renderMobile(rows) {
           <div class="mobile-main">
             ${renderThumb(item)}
             <div class="mobile-info">
-              <a class="video-title" href="${escapeAttr(item.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+              <a class="video-title" href="${escapeAttr(item.sourceUrl)}" target="_blank" rel="noreferrer">${renderTitlePlatform(item.platform)}${escapeHtml(item.title)}</a>
               <div class="mobile-tags">
                 ${renderPlatform(item.platform)}
                 ${renderStatus(item.status)}
@@ -380,7 +381,10 @@ async function updateItem(item, options = {}) {
 
   try {
     if (hasApiSettings()) {
-      await requestApi("upsert", { item });
+      const response = await requestApi("upsert", { item });
+      if (response.item) {
+        item = response.item;
+      }
     }
 
     const index = items.findIndex((row) => row.id === item.id);
@@ -631,6 +635,39 @@ function normalizeItems(rows) {
   return rows.map(normalizeItem);
 }
 
+async function refreshMissingMetadata() {
+  if (!hasApiSettings() || !items.some(needsMetadata)) return;
+
+  try {
+    setSaveState("썸네일 확인 중");
+    const response = await requestApi("refreshMetadata");
+    if (response.items) {
+      items = normalizeItems(response.items);
+      persistLocalFallback();
+      render();
+    }
+    setSaveState("준비됨");
+  } catch (error) {
+    console.warn("metadata refresh failed", error);
+    setSaveState("준비됨");
+  }
+}
+
+function needsMetadata(item) {
+  return !item.thumbnail || isAutoTitle(item.title, item.platform);
+}
+
+function isAutoTitle(title, platform) {
+  const value = String(title || "").trim();
+  if (!value) return true;
+  const currentPlatform = platform || "링크";
+  return (
+    value === "링크 자동 등록" ||
+    value.startsWith(`${currentPlatform} 링크 `) ||
+    value.startsWith(`${currentPlatform} 쇼츠 `)
+  );
+}
+
 function normalizeStatus(status) {
   const value = String(status || "").trim();
   const legacyStatus = {
@@ -747,14 +784,35 @@ function normalizeUrlKey(url) {
 
 function renderThumb(item) {
   const imageUrl = item.thumbnail || youtubeThumbnail(item.sourceUrl);
+  const mark = renderPlatformMark(item.platform);
   if (imageUrl) {
-    return `<span class="thumb"><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.textContent='${escapeAttr(platformInitial(item.platform))}'"></span>`;
+    return `<span class="thumb"><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.add('thumb-fallback')">${mark}</span>`;
   }
-  return `<span class="thumb">${escapeHtml(platformInitial(item.platform))}</span>`;
+  return `<span class="thumb thumb-fallback">${mark}</span>`;
 }
 
 function renderPlatform(platform) {
   return `<span class="pill">${escapeHtml(platform || "기타")}</span>`;
+}
+
+function renderPlatformMark(platform) {
+  const normalized = platform || "기타";
+  const className = {
+    "유튜브": "platform-youtube",
+    "인스타": "platform-instagram",
+    "틱톡": "platform-tiktok",
+  }[normalized] || "platform-etc";
+  return `<span class="platform-mark ${className}">${escapeHtml(platformInitial(normalized))}</span>`;
+}
+
+function renderTitlePlatform(platform) {
+  const normalized = platform || "기타";
+  const className = {
+    "유튜브": "platform-youtube",
+    "인스타": "platform-instagram",
+    "틱톡": "platform-tiktok",
+  }[normalized] || "platform-etc";
+  return `<span class="title-platform ${className}">${escapeHtml(platformInitial(normalized))}</span>`;
 }
 
 function renderStatus(status) {

@@ -392,6 +392,7 @@ h2 {
 }
 
 .thumb {
+  position: relative;
   display: grid;
   place-items: center;
   width: 96px;
@@ -404,6 +405,10 @@ h2 {
   font-weight: 900;
 }
 
+.thumb-fallback {
+  background: #ffffff;
+}
+
 .thumb img {
   display: block;
   width: 100%;
@@ -412,7 +417,9 @@ h2 {
 }
 
 .video-title {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 4px;
   color: var(--text);
   font-size: 17px;
@@ -444,6 +451,64 @@ h2 {
 .pill {
   background: var(--soft);
   color: var(--slate);
+}
+
+.platform-mark,
+.title-platform {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: #ffffff;
+  font-weight: 900;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.platform-mark {
+  min-width: 34px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.thumb .platform-mark {
+  position: absolute;
+  left: 7px;
+  bottom: 7px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
+}
+
+.thumb-fallback .platform-mark {
+  position: static;
+  min-width: 50px;
+  height: 38px;
+  font-size: 17px;
+  box-shadow: none;
+}
+
+.title-platform {
+  flex: 0 0 auto;
+  min-width: 28px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.platform-youtube {
+  background: #d72626;
+}
+
+.platform-instagram {
+  background: #c13584;
+}
+
+.platform-tiktok {
+  background: #111827;
+}
+
+.platform-etc {
+  background: var(--slate);
 }
 
 .status-wait,

@@ -59,6 +59,10 @@ function handleAction(input) {
     return { ok: true, item };
   }
 
+  if (input.action === "refreshMetadata") {
+    return { ok: true, items: refreshMetadata() };
+  }
+
   if (input.action === "delete") {
     deleteItem(input.id);
     return { ok: true };
@@ -130,6 +134,7 @@ function upsertItem(rawItem, userName) {
     const idColumn = headers.indexOf("ID");
     const rowIndex = findRowIndexById(values, idColumn, rawItem.id);
     const item = normalizeItem(rawItem, userName);
+    enrichItemMetadata(item);
     const row = itemToRow(headers, item);
 
     if (rowIndex >= 0) {
@@ -139,6 +144,54 @@ function upsertItem(rawItem, userName) {
     }
 
     return item;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function refreshMetadata() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const sheet = getSheet();
+    ensureHeaders(sheet);
+    const values = sheet.getDataRange().getValues();
+    if (values.length <= 1) return [];
+
+    const headers = values[0];
+    const items = [];
+
+    for (let index = 1; index < values.length; index += 1) {
+      const row = values[index];
+      if (!rowHasContent(row)) continue;
+
+      const original = rowToItem(headers, row);
+      const item = normalizeItem(original, original.updatedBy);
+      const before = JSON.stringify({
+        title: item.title,
+        sourceUrl: item.sourceUrl,
+        thumbnail: item.thumbnail,
+        platform: item.platform,
+      });
+
+      enrichItemMetadata(item);
+
+      const after = JSON.stringify({
+        title: item.title,
+        sourceUrl: item.sourceUrl,
+        thumbnail: item.thumbnail,
+        platform: item.platform,
+      });
+
+      if (before !== after) {
+        sheet.getRange(index + 1, 1, 1, headers.length).setValues([itemToRow(headers, item)]);
+      }
+
+      items.push(item);
+    }
+
+    return items;
   } finally {
     lock.releaseLock();
   }
@@ -229,6 +282,8 @@ function normalizeItem(item, userName) {
     normalized[key] = item[key] == null ? "" : String(item[key]);
   });
 
+  normalized.sourceUrl = canonicalizeSourceUrl(normalized.sourceUrl);
+  normalized.platform = normalized.platform || inferPlatform(normalized.sourceUrl);
   normalized.updatedAt = new Date().toISOString();
   normalized.updatedBy = userName || item.updatedBy || "";
   normalized.status = normalizeStatus(normalized.status);
@@ -251,6 +306,194 @@ function normalizeStatus(status) {
   const valid = ["촬영필요", "촬영완료", "작업중", "작업완료", "컨펌대기", "수정중", "수정완료", "업로드완료", "보류"];
   const normalized = legacyStatus[value] || value;
   return valid.indexOf(normalized) === -1 ? "촬영필요" : normalized;
+}
+
+function enrichItemMetadata(item) {
+  if (!item.sourceUrl) return item;
+
+  const metadata = fetchLinkMetadata(item.sourceUrl);
+  if (!metadata) return item;
+
+  item.platform = item.platform || metadata.platform || inferPlatform(item.sourceUrl);
+
+  if (metadata.title && shouldReplaceTitle(item.title, item.platform)) {
+    item.title = metadata.title;
+  }
+
+  if (metadata.thumbnail && !item.thumbnail) {
+    item.thumbnail = metadata.thumbnail;
+  }
+
+  return item;
+}
+
+function shouldReplaceTitle(title, platform) {
+  const value = String(title || "").trim();
+  const currentPlatform = platform || "링크";
+  return !value ||
+    value === "링크 자동 등록" ||
+    value.indexOf(currentPlatform + " 링크 ") === 0 ||
+    value.indexOf(currentPlatform + " 쇼츠 ") === 0;
+}
+
+function fetchLinkMetadata(url) {
+  const platform = inferPlatform(url);
+
+  if (platform === "유튜브") {
+    return fetchOembedMetadata("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent(url), platform, youtubeThumbnail(url));
+  }
+
+  if (platform === "틱톡") {
+    return fetchOembedMetadata("https://www.tiktok.com/oembed?url=" + encodeURIComponent(url), platform, "");
+  }
+
+  return fetchHtmlMetadata(url, platform);
+}
+
+function fetchOembedMetadata(endpoint, platform, fallbackThumbnail) {
+  const data = fetchJson(endpoint);
+  if (!data) {
+    return fallbackThumbnail ? { platform: platform, title: "", thumbnail: fallbackThumbnail } : null;
+  }
+
+  return {
+    platform: platform,
+    title: data.title || "",
+    thumbnail: data.thumbnail_url || fallbackThumbnail || "",
+  };
+}
+
+function fetchHtmlMetadata(url, platform) {
+  const html = fetchHtml(url);
+  if (!html) return null;
+
+  return {
+    platform: platform,
+    title: firstValue([
+      getMetaContent(html, "property", "og:title"),
+      getMetaContent(html, "name", "twitter:title"),
+      getTitleTag(html),
+    ]),
+    thumbnail: firstValue([
+      getMetaContent(html, "property", "og:image"),
+      getMetaContent(html, "name", "twitter:image"),
+      getMetaContent(html, "property", "og:image:secure_url"),
+    ]),
+  };
+}
+
+function fetchJson(url) {
+  try {
+    const response = UrlFetchApp.fetch(url, fetchOptions());
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return null;
+    return JSON.parse(response.getContentText());
+  } catch (error) {
+    return null;
+  }
+}
+
+function fetchHtml(url) {
+  try {
+    const response = UrlFetchApp.fetch(url, fetchOptions());
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) return "";
+    return response.getContentText();
+  } catch (error) {
+    return "";
+  }
+}
+
+function fetchOptions() {
+  return {
+    followRedirects: true,
+    muteHttpExceptions: true,
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+      "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+    },
+  };
+}
+
+function getMetaContent(html, attributeName, attributeValue) {
+  const tags = String(html || "").match(/<meta\s+[^>]*>/gi) || [];
+  for (let index = 0; index < tags.length; index += 1) {
+    const tag = tags[index];
+    if (getTagAttribute(tag, attributeName) === attributeValue) {
+      return decodeHtml(getTagAttribute(tag, "content") || "");
+    }
+  }
+  return "";
+}
+
+function getTagAttribute(tag, name) {
+  const pattern = new RegExp(name + "\\s*=\\s*(['\"])(.*?)\\1", "i");
+  const match = String(tag || "").match(pattern);
+  return match ? match[2] : "";
+}
+
+function getTitleTag(html) {
+  const match = String(html || "").match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return match ? decodeHtml(match[1].replace(/\s+/g, " ").trim()) : "";
+}
+
+function firstValue(values) {
+  for (let index = 0; index < values.length; index += 1) {
+    const value = String(values[index] || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+function decodeHtml(value) {
+  return String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#039;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#x([0-9a-f]+);/gi, function (_, hex) {
+      return String.fromCharCode(parseInt(hex, 16));
+    })
+    .replace(/&#([0-9]+);/g, function (_, code) {
+      return String.fromCharCode(parseInt(code, 10));
+    });
+}
+
+function canonicalizeSourceUrl(url) {
+  const value = String(url || "").trim();
+  if (!value) return "";
+
+  let normalized = /^https?:\/\//i.test(value) ? value : "https://" + value;
+  normalized = normalized.replace("instagram.com/reels/", "instagram.com/reel/");
+  normalized = normalized.replace("www.instagram.com/reels/", "www.instagram.com/reel/");
+  return normalized;
+}
+
+function inferPlatform(url) {
+  const lower = String(url || "").toLowerCase();
+  if (lower.indexOf("youtube.com") !== -1 || lower.indexOf("youtu.be") !== -1) return "유튜브";
+  if (lower.indexOf("instagram.com") !== -1) return "인스타";
+  if (lower.indexOf("tiktok.com") !== -1) return "틱톡";
+  return "기타";
+}
+
+function youtubeThumbnail(url) {
+  const videoId = youtubeVideoId(url);
+  return videoId ? "https://img.youtube.com/vi/" + videoId + "/hqdefault.jpg" : "";
+}
+
+function youtubeVideoId(url) {
+  const value = String(url || "");
+  const patterns = [
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/,
+    /youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/,
+    /youtu\.be\/([a-zA-Z0-9_-]+)/,
+  ];
+  for (let index = 0; index < patterns.length; index += 1) {
+    const match = value.match(patterns[index]);
+    if (match) return match[1];
+  }
+  return "";
 }
 
 function findHeaderIndex(headers, header) {
