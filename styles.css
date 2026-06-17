@@ -962,6 +962,37 @@ h2 {
   font-weight: 800;
 }
 
+.final-probe {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.final-probe span {
+  color: var(--muted);
+  font-weight: 900;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.final-probe span[data-tone="checking"] {
+  color: var(--blue);
+}
+
+.final-probe span[data-tone="ok"] {
+  color: var(--green);
+}
+
+.final-probe span[data-tone="error"] {
+  color: var(--red);
+}
+
 .check-field {
   display: flex;
   align-items: center;
@@ -1514,6 +1545,7 @@ h2 {
   .form-grid,
   .modal-actions,
   .quick-add-actions,
+  .final-probe,
   .settings-share {
     grid-template-columns: 1fr;
   }

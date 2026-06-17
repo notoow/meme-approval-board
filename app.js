@@ -84,6 +84,8 @@ const els = {
   finalItemTitle: document.querySelector("#finalItemTitle"),
   finalVersionHint: document.querySelector("#finalVersionHint"),
   finalUploadUrl: document.querySelector("#finalUploadUrlInput"),
+  probeFinalButton: document.querySelector("#probeFinalButton"),
+  finalProbeStatus: document.querySelector("#finalProbeStatus"),
   finalComplete: document.querySelector("#finalCompleteInput"),
   closeFinalButton: document.querySelector("#closeFinalButton"),
   cancelFinalButton: document.querySelector("#cancelFinalButton"),
@@ -146,9 +148,13 @@ els.finalForm.addEventListener("submit", (event) => {
   event.preventDefault();
   saveFinalUploadFromForm({ preview: false });
 });
-els.finalUploadUrl.addEventListener("input", () => validateFinalUploadControl(els.finalUploadUrl));
+els.finalUploadUrl.addEventListener("input", () => {
+  validateFinalUploadControl(els.finalUploadUrl);
+  setFinalProbeStatus("저장 전에 파일 접근을 확인할 수 있습니다");
+});
 els.closeFinalButton.addEventListener("click", closeFinalUploadDialog);
 els.cancelFinalButton.addEventListener("click", closeFinalUploadDialog);
+els.probeFinalButton.addEventListener("click", probeFinalUploadFromDialog);
 els.saveFinalButton.addEventListener("click", () => saveFinalUploadFromForm({ preview: false }));
 els.saveFinalPreviewButton.addEventListener("click", () => saveFinalUploadFromForm({ preview: true }));
 els.closePlayerButton.addEventListener("click", closePlayerDialog);
@@ -743,6 +749,7 @@ function openFinalUploadDialog(item) {
   els.finalUploadUrl.value = "";
   els.finalComplete.checked = false;
   els.finalUploadUrl.setCustomValidity("");
+  setFinalProbeStatus("저장 전에 파일 접근을 확인할 수 있습니다");
   els.finalDialog.showModal();
   window.setTimeout(() => {
     els.finalUploadUrl.focus();
@@ -791,6 +798,137 @@ async function saveFinalUploadFromForm(options = {}) {
     els.saveFinalButton.disabled = false;
     els.saveFinalPreviewButton.disabled = false;
   }
+}
+
+async function probeFinalUploadFromDialog() {
+  const uploadUrl = validateFinalUploadControl(els.finalUploadUrl);
+  if (!els.finalForm.reportValidity()) return;
+
+  els.probeFinalButton.disabled = true;
+  setFinalProbeStatus("NAS 파일 확인 중", "checking");
+
+  try {
+    const result = await probeFinalUploadPath(uploadUrl);
+    if (result.ok) {
+      const sizeText = result.size ? ` / ${formatFileSize(result.size)}` : "";
+      setFinalProbeStatus(`재생 준비됨${sizeText}`, "ok");
+      return;
+    }
+    setFinalProbeStatus(result.message || "파일을 확인하지 못했습니다", "error");
+  } finally {
+    els.probeFinalButton.disabled = false;
+  }
+}
+
+async function probeFinalUploadPath(path) {
+  if (!isAllowedFinalUploadPath(path)) {
+    return {
+      ok: false,
+      message: FINAL_UPLOAD_HELP,
+    };
+  }
+
+  const probeUrl = buildNasProbeUrl(path);
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(probeUrl, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (response.ok) {
+      const data = await response.json().catch(() => ({}));
+      return {
+        ok: true,
+        contentType: data.contentType || "",
+        size: Number(data.size) || 0,
+      };
+    }
+
+    if (response.status === 404 && !(await nasServerSupportsProbe(controller.signal))) {
+      return await probeFinalUploadPathWithHead(path, controller.signal);
+    }
+
+    return {
+      ok: false,
+      message: finalProbeErrorMessage(response.status),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error?.name === "AbortError"
+        ? "NAS 서버 응답이 늦습니다. 서버 창이 켜져 있는지 확인해 주세요."
+        : "NAS 스트리밍 서버에 연결하지 못했습니다. start-windows.ps1 창이 켜져 있는지 확인해 주세요.",
+    };
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+async function nasServerSupportsProbe(signal) {
+  try {
+    const response = await fetch(`${getNasStreamUrl()}/health`, {
+      cache: "no-store",
+      signal,
+    });
+    if (!response.ok) return false;
+
+    const data = await response.json().catch(() => ({}));
+    return Boolean(data.features?.probe);
+  } catch {
+    return false;
+  }
+}
+
+async function probeFinalUploadPathWithHead(path, signal) {
+  const response = await fetch(buildNasStreamUrl(path), {
+    method: "HEAD",
+    cache: "no-store",
+    signal,
+  });
+
+  if (response.ok) {
+    return {
+      ok: true,
+      contentType: response.headers.get("content-type") || "",
+      size: Number(response.headers.get("content-length")) || 0,
+    };
+  }
+
+  return {
+    ok: false,
+    message: finalProbeErrorMessage(response.status),
+  };
+}
+
+function finalProbeErrorMessage(status) {
+  if (status === 403) return "허용된 NAS 폴더 밖의 경로입니다.";
+  if (status === 404) return "파일을 찾지 못했습니다. 파일명과 폴더 위치를 확인해 주세요.";
+  if (status === 400) return "NAS 경로 형식을 확인해 주세요.";
+  if (status === 405) return "NAS 서버 버전이 오래되었습니다. 서버를 다시 받아 실행해 주세요.";
+  if (status >= 500) return "NAS 서버는 켜져 있지만 파일 접근에 실패했습니다. 파일명과 NAS 권한을 확인해 주세요.";
+  return `NAS 파일 확인 실패 (${status})`;
+}
+
+function setFinalProbeStatus(message, tone = "") {
+  els.finalProbeStatus.textContent = message;
+  els.finalProbeStatus.dataset.tone = tone;
+}
+
+function formatFileSize(size) {
+  const value = Number(size);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let unitIndex = 0;
+  let next = value;
+  while (next >= 1024 && unitIndex < units.length - 1) {
+    next /= 1024;
+    unitIndex += 1;
+  }
+  return `${next.toFixed(next >= 10 || unitIndex === 0 ? 0 : 1)}${units[unitIndex]}`;
 }
 
 function statusAfterFinalUpload(status, isComplete = false) {
@@ -2083,6 +2221,11 @@ function isNasFilePath(url) {
 function buildNasStreamUrl(path) {
   const base = getNasStreamUrl();
   return `${base}/stream?path=${encodeURIComponent(path)}`;
+}
+
+function buildNasProbeUrl(path) {
+  const base = getNasStreamUrl();
+  return `${base}/probe?path=${encodeURIComponent(path)}`;
 }
 
 function isDirectVideoUrl(url) {

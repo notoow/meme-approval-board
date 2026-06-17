@@ -48,6 +48,7 @@ node .\server.js
 ```text
 GET /health
 GET /stream?path=<encoded NAS path>
+GET /probe?path=<encoded NAS path>
 ```
 
-Only files under `NAS_ALLOWED_PREFIX` are served.
+Only files under `NAS_ALLOWED_PREFIX` are served. `/probe` checks file access and returns metadata without streaming the video body.

@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>밈 숏폼 제작 보드</title>
-    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-19" />
-    <link rel="stylesheet" href="./styles.css?v=20260617-19" />
+    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-20" />
+    <link rel="stylesheet" href="./styles.css?v=20260617-20" />
   </head>
   <body>
     <div class="app-shell">
@@ -230,6 +230,10 @@
           <span>완성본 링크/NAS 경로</span>
           <input id="finalUploadUrlInput" name="finalUploadUrl" type="text" required placeholder="\\192.168.0.10\highst_영상팀\@종편,클린본,콜렉트\숏폼\밈 나스링크\파일명.mp4" />
         </label>
+        <div class="final-probe">
+          <button class="secondary-button" id="probeFinalButton" type="button">NAS 재생 확인</button>
+          <span id="finalProbeStatus" role="status">저장 전에 파일 접근을 확인할 수 있습니다</span>
+        </div>
         <label class="check-field">
           <input id="finalCompleteInput" type="checkbox" />
           <span>이번 버전으로 작업 완료 / 업로드 대기</span>
@@ -351,6 +355,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260617-19"></script>
+    <script src="./app.js?v=20260617-20"></script>
   </body>
 </html>

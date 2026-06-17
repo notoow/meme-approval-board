@@ -4,6 +4,7 @@ const path = require("path");
 const { URL } = require("url");
 
 const DEFAULT_ALLOWED_PREFIX = "\\\\192.168.0.10\\highst_영상팀\\@종편,클린본,콜렉트\\숏폼\\밈 나스링크";
+const SERVER_VERSION = "20260617-20";
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "127.0.0.1";
 const allowedPrefixes = String(process.env.NAS_ALLOWED_PREFIX || DEFAULT_ALLOWED_PREFIX)
@@ -35,8 +36,38 @@ const server = http.createServer(async (req, res) => {
     if (requestUrl.pathname === "/health") {
       sendJson(res, 200, {
         ok: true,
+        version: SERVER_VERSION,
+        features: {
+          probe: true,
+        },
         allowedPrefixes,
       });
+      return;
+    }
+
+    if (requestUrl.pathname === "/probe") {
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        sendJson(res, 405, { ok: false, error: "Method not allowed" });
+        return;
+      }
+
+      const rawPath = requestUrl.searchParams.get("path") || "";
+      const filePath = normalizeFilePath(rawPath);
+
+      if (!filePath) {
+        sendJson(res, 400, { ok: false, error: "Missing path" });
+        return;
+      }
+
+      if (!isAllowedPath(filePath)) {
+        sendJson(res, 403, {
+          ok: false,
+          error: "Path is outside the allowed NAS folder",
+        });
+        return;
+      }
+
+      await probeFile(req, res, filePath);
       return;
     }
 
@@ -83,8 +114,36 @@ server.listen(PORT, HOST, () => {
   allowedPrefixes.forEach((prefix) => console.log(`- ${prefix}`));
 });
 
+async function probeFile(req, res, filePath) {
+  const stat = await statFileOrReply(res, filePath);
+  if (!stat) return;
+
+  if (!stat.isFile()) {
+    sendJson(res, 400, { ok: false, error: "Path is not a file" });
+    return;
+  }
+
+  const contentType = MIME_TYPES[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+  const payload = {
+    ok: true,
+    fileName: path.win32.basename(filePath),
+    size: stat.size,
+    modifiedAt: stat.mtime.toISOString(),
+    contentType,
+  };
+
+  res.writeHead(200, {
+    "Cache-Control": "no-store",
+    "Content-Length": Buffer.byteLength(JSON.stringify(payload)),
+    "Content-Type": "application/json; charset=utf-8",
+  });
+  res.end(req.method === "HEAD" ? "" : JSON.stringify(payload));
+}
+
 async function streamFile(req, res, filePath) {
-  const stat = await fs.promises.stat(filePath);
+  const stat = await statFileOrReply(res, filePath);
+  if (!stat) return;
+
   if (!stat.isFile()) {
     sendJson(res, 400, { ok: false, error: "Path is not a file" });
     return;
@@ -137,6 +196,22 @@ async function streamFile(req, res, filePath) {
   }
 
   fs.createReadStream(filePath, { start, end }).pipe(res);
+}
+
+async function statFileOrReply(res, filePath) {
+  try {
+    return await fs.promises.stat(filePath);
+  } catch (error) {
+    if (error && ["ENOENT", "ENOTDIR"].includes(error.code)) {
+      sendJson(res, 404, { ok: false, error: "File not found" });
+      return null;
+    }
+    if (error && ["EACCES", "EPERM"].includes(error.code)) {
+      sendJson(res, 403, { ok: false, error: "File access denied" });
+      return null;
+    }
+    throw error;
+  }
 }
 
 function parseRange(rangeHeader, fileSize) {
