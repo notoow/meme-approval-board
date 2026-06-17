@@ -59,6 +59,11 @@ function handleAction(input) {
     return { ok: true, item };
   }
 
+  if (input.action === "batchUpsert") {
+    const items = upsertItems(input.items, input.userName);
+    return { ok: true, items };
+  }
+
   if (input.action === "refreshMetadata") {
     return { ok: true, items: refreshMetadata() };
   }
@@ -144,6 +149,67 @@ function upsertItem(rawItem, userName) {
     }
 
     return item;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function upsertItems(rawItems, userName) {
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    throw new Error("저장할 항목이 없습니다.");
+  }
+
+  const items = rawItems.map((rawItem) => {
+    if (!rawItem || !rawItem.id) {
+      throw new Error("저장할 항목 ID가 없습니다.");
+    }
+
+    const item = normalizeItem(rawItem, userName);
+    enrichItemMetadata(item);
+    return item;
+  });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const sheet = getSheet();
+    ensureHeaders(sheet);
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const idColumn = headers.indexOf("ID");
+    const rowById = {};
+    const rowsToAppend = [];
+    const appendedIds = {};
+
+    if (idColumn < 0) {
+      throw new Error("ID 컬럼을 찾을 수 없습니다.");
+    }
+
+    for (let index = 1; index < values.length; index += 1) {
+      const id = String(values[index][idColumn]);
+      if (id) {
+        rowById[id] = index + 1;
+      }
+    }
+
+    items.forEach((item) => {
+      const row = itemToRow(headers, item);
+      const rowIndex = rowById[String(item.id)];
+
+      if (rowIndex) {
+        sheet.getRange(rowIndex, 1, 1, headers.length).setValues([row]);
+      } else if (!appendedIds[String(item.id)]) {
+        rowsToAppend.push(row);
+        appendedIds[String(item.id)] = true;
+      }
+    });
+
+    if (rowsToAppend.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, headers.length).setValues(rowsToAppend);
+    }
+
+    return items;
   } finally {
     lock.releaseLock();
   }

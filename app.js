@@ -417,19 +417,9 @@ function focusQuickField(row, field) {
 }
 
 async function saveQuickItemsToServer(newItems) {
-  setSaveState(`시트 저장 중 (0/${newItems.length})`);
+  setSaveState(`시트 일괄 저장 중 (0/${newItems.length})`);
 
-  let completedCount = 0;
-  const results = await runLimitedConcurrency(newItems, 3, async (item) => {
-    const savedItem = await saveItemToServer(item);
-    if (items.some((row) => row.id === item.id)) {
-      upsertLocalItem(savedItem);
-    }
-    return savedItem;
-  }, () => {
-    completedCount += 1;
-    setSaveState(`시트 저장 중 (${completedCount}/${newItems.length})`);
-  });
+  const results = await saveQuickItemsBatchToServer(newItems);
 
   persistLocalFallback();
   render();
@@ -446,6 +436,51 @@ async function saveQuickItemsToServer(newItems) {
 
   setSaveState("일부 저장 실패");
   setQuickStatus(`${savedCount}개 저장됨, ${failedCount}개 실패. 실패 항목은 목록에 남겨뒀습니다`);
+}
+
+async function saveQuickItemsBatchToServer(newItems) {
+  if (!hasApiSettings()) {
+    return newItems.map((item) => ({ status: "fulfilled", value: normalizeItem(item) }));
+  }
+
+  try {
+    const response = await requestApi("batchUpsert", { items: newItems });
+    const savedItems = Array.isArray(response.items) ? response.items.map(normalizeItem) : [];
+
+    if (savedItems.length !== newItems.length) {
+      throw new Error("batchUpsert item count mismatch");
+    }
+
+    savedItems.forEach((savedItem) => {
+      if (items.some((row) => row.id === savedItem.id)) {
+        upsertLocalItem(savedItem);
+      }
+    });
+
+    setSaveState(`시트 일괄 저장 중 (${savedItems.length}/${newItems.length})`);
+    return savedItems.map((savedItem) => ({ status: "fulfilled", value: savedItem }));
+  } catch (error) {
+    console.warn("batchUpsert failed; falling back to individual saves", error);
+    return saveQuickItemsIndividually(newItems);
+  }
+}
+
+async function saveQuickItemsIndividually(newItems) {
+  setSaveState(`개별 저장으로 재시도 (0/${newItems.length})`);
+
+  let completedCount = 0;
+  const results = await runLimitedConcurrency(newItems, 3, async (item) => {
+    const savedItem = await saveItemToServer(item);
+    if (items.some((row) => row.id === item.id)) {
+      upsertLocalItem(savedItem);
+    }
+    return savedItem;
+  }, () => {
+    completedCount += 1;
+    setSaveState(`개별 저장으로 재시도 (${completedCount}/${newItems.length})`);
+  });
+
+  return results;
 }
 
 async function runLimitedConcurrency(itemsToRun, limit, worker, onSettled = () => {}) {
