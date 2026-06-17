@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>밈 숏폼 제작 보드</title>
-    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-12" />
-    <link rel="stylesheet" href="./styles.css?v=20260617-12" />
+    <link rel="icon" type="image/png" href="./assets/notoow_logo.png?v=20260617-13" />
+    <link rel="stylesheet" href="./styles.css?v=20260617-13" />
   </head>
   <body>
     <div class="app-shell">
@@ -186,7 +186,7 @@
             <span>수정 요청 메모</span>
             <textarea id="feedbackInput" name="feedback" rows="3" placeholder="수정할 내용을 적어주세요."></textarea>
           </label>
-          <label class="field span-2">
+          <label class="field span-2" hidden>
             <span>완성본 링크</span>
             <input id="uploadUrlInput" name="uploadUrl" type="text" placeholder="https://... 또는 NAS 경로" />
           </label>
@@ -218,12 +218,12 @@
         <input id="finalItemId" type="hidden" />
         <div class="final-upload-summary">
           <strong id="finalItemTitle">콘텐츠 제목</strong>
-          <span>NAS 파일 경로, 유튜브 일부공개 링크, 또는 mp4 링크를 붙여넣으면 됩니다.</span>
+          <span id="finalVersionHint">NAS 완성본 경로만 붙여넣으면 새 버전으로 추가됩니다.</span>
         </div>
 
         <label class="field span-2">
           <span>완성본 링크/NAS 경로</span>
-          <input id="finalUploadUrlInput" name="finalUploadUrl" type="text" required placeholder="\\192.168.0.10\...\완성본.mp4" />
+          <input id="finalUploadUrlInput" name="finalUploadUrl" type="text" required placeholder="\\192.168.0.10\highst_영상팀\@종편,클린본,콜렉트\숏폼\밈 나스링크\파일명.mp4" />
         </label>
 
         <div class="modal-actions final-actions">
@@ -244,6 +244,7 @@
           </div>
           <button class="icon-button" id="closePlayerButton" aria-label="닫기" type="button">×</button>
         </div>
+        <div class="player-version-tabs" id="playerVersionTabs" aria-label="완성본 버전 선택"></div>
         <div class="player-body" id="playerBody"></div>
         <div class="player-actions">
           <a class="secondary-button" id="playerOpenLink" target="_blank" rel="noreferrer">새 창으로 열기</a>
@@ -299,6 +300,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260617-12"></script>
+    <script src="./app.js?v=20260617-13"></script>
   </body>
 </html>

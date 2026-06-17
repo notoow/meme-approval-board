@@ -1,6 +1,8 @@
 const STORAGE_KEY = "meme-board-settings";
 const LOCAL_DATA_KEY = "meme-board-local-data";
 const DEFAULT_NAS_STREAM_URL = "http://127.0.0.1:8787";
+const FINAL_UPLOAD_PREFIX = "\\\\192.168.0.10\\highst_영상팀\\@종편,클린본,콜렉트\\숏폼\\밈 나스링크";
+const FINAL_UPLOAD_HELP = `${FINAL_UPLOAD_PREFIX}\\파일명.mp4 형식만 입력해 주세요.`;
 
 const STATUS_CLASS = {
   "촬영필요": "status-wait",
@@ -31,6 +33,8 @@ let activeFilter = "all";
 let searchQuery = "";
 let settings = applySharedSettings(loadSettings());
 let quickSaving = false;
+let activePlayerItemId = "";
+let activePlayerVersionIndex = -1;
 
 const els = {
   setupNotice: document.querySelector("#setupNotice"),
@@ -50,6 +54,7 @@ const els = {
   itemDialogTitle: document.querySelector("#itemDialogTitle"),
   playerDialog: document.querySelector("#playerDialog"),
   playerTitle: document.querySelector("#playerTitle"),
+  playerVersionTabs: document.querySelector("#playerVersionTabs"),
   playerBody: document.querySelector("#playerBody"),
   playerOpenLink: document.querySelector("#playerOpenLink"),
   closePlayerButton: document.querySelector("#closePlayerButton"),
@@ -57,6 +62,7 @@ const els = {
   finalForm: document.querySelector("#finalForm"),
   finalItemId: document.querySelector("#finalItemId"),
   finalItemTitle: document.querySelector("#finalItemTitle"),
+  finalVersionHint: document.querySelector("#finalVersionHint"),
   finalUploadUrl: document.querySelector("#finalUploadUrlInput"),
   closeFinalButton: document.querySelector("#closeFinalButton"),
   cancelFinalButton: document.querySelector("#cancelFinalButton"),
@@ -104,6 +110,7 @@ els.finalForm.addEventListener("submit", (event) => {
   event.preventDefault();
   saveFinalUploadFromForm({ preview: false });
 });
+els.finalUploadUrl.addEventListener("input", () => validateFinalUploadControl(els.finalUploadUrl));
 els.closeFinalButton.addEventListener("click", closeFinalUploadDialog);
 els.cancelFinalButton.addEventListener("click", closeFinalUploadDialog);
 els.saveFinalButton.addEventListener("click", () => saveFinalUploadFromForm({ preview: false }));
@@ -111,6 +118,7 @@ els.saveFinalPreviewButton.addEventListener("click", () => saveFinalUploadFromFo
 els.closePlayerButton.addEventListener("click", closePlayerDialog);
 els.playerDialog.addEventListener("close", clearPlayerDialog);
 els.playerBody.addEventListener("click", handlePlayerBodyClick);
+els.playerVersionTabs.addEventListener("click", handlePlayerVersionClick);
 document.querySelector("#saveSettingsButton").addEventListener("click", saveSettingsFromDialog);
 document.querySelector("#clearSettingsButton").addEventListener("click", clearSettings);
 els.createShareLinkButton.addEventListener("click", createSettingsShareLink);
@@ -438,6 +446,7 @@ function renderTable(rows) {
               <button class="row-button edit" type="button" data-action="edit" data-id="${escapeAttr(item.id)}">내용 수정</button>
               ${renderPreviewButton(item)}
               <button class="row-button delete" type="button" data-action="delete" data-id="${escapeAttr(item.id)}" aria-label="삭제" title="삭제">${renderTrashIcon()}</button>
+              ${renderFinalThumb(item)}
             </div>
           </td>
         </tr>
@@ -466,6 +475,7 @@ function renderMobile(rows) {
             <button class="row-button edit" type="button" data-action="edit" data-id="${escapeAttr(item.id)}">내용 수정</button>
             ${renderPreviewButton(item)}
             <button class="row-button delete" type="button" data-action="delete" data-id="${escapeAttr(item.id)}" aria-label="삭제" title="삭제">${renderTrashIcon()}</button>
+            ${renderFinalThumb(item)}
           </div>
         </article>
       `;
@@ -560,7 +570,7 @@ async function saveItemFromForm() {
     feedback: form.feedback.value.trim(),
     dueDate: form.dueDate.value,
     scheduleDate: form.scheduleDate.value,
-    uploadUrl: form.uploadUrl.value.trim(),
+    uploadUrl: current?.uploadUrl || form.uploadUrl.value.trim(),
     updatedAt: now,
     updatedBy: settings.userName || current?.updatedBy || "",
   };
@@ -570,13 +580,15 @@ async function saveItemFromForm() {
 }
 
 function openFinalUploadDialog(item) {
+  const nextVersion = getAllowedFinalVersions(item).length + 1;
   els.finalItemId.value = item.id;
   els.finalItemTitle.textContent = item.title || "제작 제목 없음";
-  els.finalUploadUrl.value = item.uploadUrl || "";
+  els.finalVersionHint.textContent = `이번 업로드는 v${nextVersion}로 저장됩니다. NAS 완성본 경로만 입력해 주세요.`;
+  els.finalUploadUrl.value = "";
+  els.finalUploadUrl.setCustomValidity("");
   els.finalDialog.showModal();
   window.setTimeout(() => {
     els.finalUploadUrl.focus();
-    els.finalUploadUrl.select();
   }, 0);
 }
 
@@ -585,6 +597,7 @@ function closeFinalUploadDialog() {
 }
 
 async function saveFinalUploadFromForm(options = {}) {
+  const uploadUrl = validateFinalUploadControl(els.finalUploadUrl);
   if (!els.finalForm.reportValidity()) return;
 
   const id = els.finalItemId.value;
@@ -594,9 +607,15 @@ async function saveFinalUploadFromForm(options = {}) {
   els.saveFinalButton.disabled = true;
   els.saveFinalPreviewButton.disabled = true;
 
+  const versions = getAllowedFinalVersions(current);
+  const nextVersion = {
+    label: `v${versions.length + 1}`,
+    url: uploadUrl,
+  };
+
   const updated = {
     ...current,
-    uploadUrl: els.finalUploadUrl.value.trim(),
+    uploadUrl: serializeFinalVersions([...versions, nextVersion]),
     status: statusAfterFinalUpload(current.status),
     updatedAt: new Date().toISOString(),
     updatedBy: settings.userName || current.updatedBy || "",
@@ -1186,6 +1205,148 @@ function normalizeUrlKey(url) {
   }
 }
 
+function getFinalVersions(item) {
+  const rawValue = String(item.uploadUrl || "").trim();
+  if (!rawValue) return [];
+
+  const jsonVersions = parseJsonFinalVersions(rawValue);
+  if (jsonVersions.length > 0) return jsonVersions;
+
+  const lines = rawValue
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const parsedLines = lines
+    .map(parseFinalVersionLine)
+    .filter(Boolean);
+
+  if (parsedLines.length > 0) {
+    return parsedLines;
+  }
+
+  return [
+    {
+      label: "v1",
+      url: normalizeFinalUploadPath(rawValue),
+    },
+  ];
+}
+
+function getAllowedFinalVersions(item) {
+  return getFinalVersions(item).filter((version) => isAllowedFinalUploadPath(version.url));
+}
+
+function parseJsonFinalVersions(value) {
+  try {
+    const parsed = JSON.parse(value);
+    const versions = Array.isArray(parsed) ? parsed : parsed.versions;
+    if (!Array.isArray(versions)) return [];
+    return versions
+      .map((version, index) => ({
+        label: String(version.label || `v${index + 1}`),
+        url: normalizeFinalUploadPath(version.url || version.path || ""),
+      }))
+      .filter((version) => version.url);
+  } catch {
+    return [];
+  }
+}
+
+function parseFinalVersionLine(line) {
+  const match = String(line || "").match(/^(v\d+)\s*\|\s*(.+)$/i);
+  if (!match) return null;
+  return {
+    label: match[1].toLowerCase(),
+    url: normalizeFinalUploadPath(match[2]),
+  };
+}
+
+function serializeFinalVersions(versions) {
+  return versions
+    .map((version, index) => ({
+      label: String(version.label || `v${index + 1}`).toLowerCase(),
+      url: normalizeFinalUploadPath(version.url),
+    }))
+    .filter((version) => version.url)
+    .map((version) => `${version.label} | ${version.url}`)
+    .join("\n");
+}
+
+function validateFinalUploadControl(control) {
+  const normalized = normalizeFinalUploadPath(control.value);
+
+  if (!normalized) {
+    control.setCustomValidity("");
+    return "";
+  }
+
+  if (!isAllowedFinalUploadPath(normalized)) {
+    control.setCustomValidity(FINAL_UPLOAD_HELP);
+    return "";
+  }
+
+  if (!isDirectVideoUrl(normalized)) {
+    control.setCustomValidity("완성본 영상 파일 경로만 입력해 주세요. 예: 파일명.mp4");
+    return "";
+  }
+
+  control.value = normalized;
+  control.setCustomValidity("");
+  return normalized;
+}
+
+function normalizeFinalUploadPath(value) {
+  let path = stripWrappingQuotes(String(value || "").trim());
+  if (!path) return "";
+
+  path = path.replace(/^file:(\/\/\/)?/i, "");
+  path = stripWrappingQuotes(path);
+
+  if (path.startsWith("//")) {
+    path = `\\\\${path.slice(2)}`;
+  }
+
+  if (path.startsWith("\\\\") || /^[a-zA-Z]:[\\/]/.test(path)) {
+    path = path.replace(/\//g, "\\");
+  }
+
+  return path;
+}
+
+function stripWrappingQuotes(value) {
+  let next = String(value || "").trim();
+  const quotePairs = {
+    "\"": "\"",
+    "'": "'",
+    "“": "”",
+    "‘": "’",
+  };
+
+  let changed = true;
+  while (changed && next.length >= 2) {
+    changed = false;
+    const first = next[0];
+    const last = next[next.length - 1];
+    if (quotePairs[first] === last) {
+      next = next.slice(1, -1).trim();
+      changed = true;
+    }
+  }
+
+  return next;
+}
+
+function isAllowedFinalUploadPath(value) {
+  const pathKey = normalizeFinalPathForCompare(value);
+  const prefixKey = normalizeFinalPathForCompare(FINAL_UPLOAD_PREFIX);
+  return pathKey === prefixKey || pathKey.startsWith(`${prefixKey}\\`);
+}
+
+function normalizeFinalPathForCompare(value) {
+  return normalizeFinalUploadPath(value).replace(/\\+$/, "").toLowerCase();
+}
+
 function renderThumb(item) {
   const imageUrl = item.thumbnail || youtubeThumbnail(item.sourceUrl);
   if (imageUrl) {
@@ -1215,12 +1376,62 @@ function renderPreviewButton(item) {
   return `<button class="row-button play" type="button" data-action="play" data-id="${escapeAttr(item.id)}">완성본 미리보기</button>`;
 }
 
-function openPlayerDialog(item) {
-  const link = getPlaybackLink(item);
+function renderFinalThumb(item) {
+  const versions = getFinalVersions(item);
+  const latest = versions[versions.length - 1];
+  if (!latest) {
+    return `<span class="final-thumb-empty" title="완성본 없음">없음</span>`;
+  }
+
+  return `
+    <button class="final-thumb-button" type="button" data-action="play" data-id="${escapeAttr(item.id)}" aria-label="최신 완성본 ${escapeAttr(latest.label)} 미리보기">
+      ${renderFinalThumbMedia(latest.url)}
+      <span class="final-thumb-version">${escapeHtml(latest.label)}</span>
+    </button>
+  `;
+}
+
+function renderFinalThumbMedia(url) {
+  const normalized = normalizeFinalUploadPath(url);
+  const youtubeId = youtubeVideoId(normalized);
+
+  if (youtubeId) {
+    return `
+      <img class="final-thumb-media" src="${escapeAttr(youtubeThumbnail(normalized))}" alt="" loading="lazy" onerror="this.parentElement.classList.add('is-fallback')" />
+      <span class="final-thumb-fallback">완성본</span>
+    `;
+  }
+
+  if (isAllowedFinalUploadPath(normalized)) {
+    const mediaUrl = buildNasStreamUrl(normalized);
+    return `
+      <video class="final-thumb-media" src="${escapeAttr(mediaUrl)}" preload="metadata" muted playsinline onloadedmetadata="this.currentTime = Math.min(0.1, this.duration || 0.1)" onerror="this.parentElement.classList.add('is-fallback')"></video>
+      <span class="final-thumb-fallback">완성본</span>
+    `;
+  }
+
+  if (/^https?:\/\//i.test(normalized) && isDirectVideoUrl(normalized)) {
+    return `
+      <video class="final-thumb-media" src="${escapeAttr(normalized)}" preload="metadata" muted playsinline onloadedmetadata="this.currentTime = Math.min(0.1, this.duration || 0.1)" onerror="this.parentElement.classList.add('is-fallback')"></video>
+      <span class="final-thumb-fallback">완성본</span>
+    `;
+  }
+
+  return `<span class="final-thumb-fallback is-visible">경로 확인</span>`;
+}
+
+function openPlayerDialog(item, versionIndex = null) {
+  const versions = getFinalVersions(item);
+  const selectedIndex = versionIndex == null ? versions.length - 1 : versionIndex;
+  const selected = versions[selectedIndex];
+  const link = selected?.url || getPlaybackLink(item);
   if (!link) return;
 
   const player = buildPlayerEmbed(link);
+  activePlayerItemId = item.id;
+  activePlayerVersionIndex = Math.max(selectedIndex, 0);
   els.playerTitle.textContent = item.title || "완성본";
+  renderPlayerVersionTabs(versions, activePlayerVersionIndex);
   els.playerBody.innerHTML = player.html;
 
   if (player.openUrl) {
@@ -1231,7 +1442,35 @@ function openPlayerDialog(item) {
     els.playerOpenLink.removeAttribute("href");
   }
 
-  els.playerDialog.showModal();
+  if (!els.playerDialog.open) {
+    els.playerDialog.showModal();
+  }
+}
+
+function renderPlayerVersionTabs(versions, activeIndex) {
+  if (versions.length <= 1) {
+    els.playerVersionTabs.innerHTML = "";
+    els.playerVersionTabs.hidden = true;
+    return;
+  }
+
+  els.playerVersionTabs.hidden = false;
+  els.playerVersionTabs.innerHTML = versions
+    .map((version, index) => {
+      const activeClass = index === activeIndex ? " is-active" : "";
+      return `<button class="version-tab${activeClass}" type="button" data-version-index="${index}">${escapeHtml(version.label)}</button>`;
+    })
+    .join("");
+}
+
+function handlePlayerVersionClick(event) {
+  const button = event.target.closest("[data-version-index]");
+  if (!button || !activePlayerItemId) return;
+
+  const item = items.find((row) => row.id === activePlayerItemId);
+  if (!item) return;
+
+  openPlayerDialog(item, Number(button.dataset.versionIndex));
 }
 
 function closePlayerDialog() {
@@ -1239,6 +1478,10 @@ function closePlayerDialog() {
 }
 
 function clearPlayerDialog() {
+  activePlayerItemId = "";
+  activePlayerVersionIndex = -1;
+  els.playerVersionTabs.innerHTML = "";
+  els.playerVersionTabs.hidden = true;
   els.playerBody.innerHTML = "";
   els.playerOpenLink.removeAttribute("href");
 }
@@ -1251,12 +1494,17 @@ function handlePlayerBodyClick(event) {
 }
 
 function getPlaybackLink(item) {
-  return String(item.uploadUrl || "").trim();
+  const versions = getFinalVersions(item);
+  return versions[versions.length - 1]?.url || "";
 }
 
 function buildPlayerEmbed(rawUrl) {
-  const url = String(rawUrl || "").trim();
+  const url = normalizeFinalUploadPath(rawUrl);
   const escapedUrl = escapeAttr(url);
+
+  if (isNasFilePath(url) && !isAllowedFinalUploadPath(url)) {
+    return buildInvalidFinalPathPlayer(url);
+  }
 
   if (isNasFilePath(url)) {
     const streamUrl = buildNasStreamUrl(url);
@@ -1307,7 +1555,20 @@ function buildPlayerEmbed(rawUrl) {
     html: `
       <div class="player-message">
         <strong>재생할 수 없는 링크 형식입니다.</strong>
-        <p>유튜브 링크 또는 https로 시작하는 mp4 링크를 넣어 주세요.</p>
+        <p>${escapeHtml(FINAL_UPLOAD_HELP)}</p>
+        <code>${escapeHtml(url)}</code>
+      </div>
+    `,
+  };
+}
+
+function buildInvalidFinalPathPlayer(url) {
+  return {
+    openUrl: "",
+    html: `
+      <div class="player-message">
+        <strong>허용된 NAS 완성본 경로가 아닙니다.</strong>
+        <p>${escapeHtml(FINAL_UPLOAD_HELP)}</p>
         <code>${escapeHtml(url)}</code>
       </div>
     `,
