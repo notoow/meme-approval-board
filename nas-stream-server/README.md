@@ -15,6 +15,10 @@ cd "C:\Users\alpha\Desktop\WOOTAN\@Programming\260615 meme-approval-board\nas-st
 .\start-windows.ps1
 ```
 
+Or double-click `start-windows.cmd`.
+
+The start script stores the Korean NAS folder in an encoded form so older Windows PowerShell sessions do not break the path.
+
 The board defaults to:
 
 ```text
@@ -22,6 +26,13 @@ http://127.0.0.1:8787
 ```
 
 In the board settings, `NAS 스트리밍 주소` can be changed if this helper is hosted elsewhere.
+
+If port `8787` is already in use, start it on a temporary port:
+
+```powershell
+$env:PORT="8788"
+.\start-windows.ps1
+```
 
 ## Manual Start
 

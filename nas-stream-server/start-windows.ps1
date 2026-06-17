@@ -1,8 +1,23 @@
 $ErrorActionPreference = "Stop"
 
-$env:HOST = "127.0.0.1"
-$env:PORT = "8787"
-$env:NAS_ALLOWED_PREFIX = "\\192.168.0.10\highst_영상팀\@종편,클린본,콜렉트\숏폼\밈 나스링크"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+chcp 65001 > $null
+
+$allowedPrefixBase64 = "XABcADEAOQAyAC4AMQA2ADgALgAwAC4AMQAwAFwAaABpAGcAaABzAHQAXwABxsHAANNcAEAAhci40ywAdNCwufi8LABczwm4uNJcAA/C/NNcAAi8IACYsKTCwbls0A=="
+$allowedPrefix = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($allowedPrefixBase64))
+
+if (-not $env:HOST) {
+  $env:HOST = "127.0.0.1"
+}
+
+if (-not $env:PORT) {
+  $env:PORT = "8787"
+}
+
+if (-not $env:NAS_ALLOWED_PREFIX) {
+  $env:NAS_ALLOWED_PREFIX = $allowedPrefix
+}
 
 Write-Host "NAS stream server starting..."
 Write-Host "URL: http://$($env:HOST):$($env:PORT)"
