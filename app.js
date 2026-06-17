@@ -417,25 +417,25 @@ function focusQuickField(row, field) {
 }
 
 async function saveQuickItemsToServer(newItems) {
-  setSaveState("시트 저장 중");
+  setSaveState(`시트 저장 중 (0/${newItems.length})`);
 
-  let savedCount = 0;
-  for (const item of newItems) {
-    try {
-      const savedItem = await saveItemToServer(item);
-      savedCount += 1;
-
-      if (items.some((row) => row.id === item.id)) {
-        upsertLocalItem(savedItem);
-      }
-    } catch (error) {
-      console.error(error);
-      break;
+  let completedCount = 0;
+  const results = await runLimitedConcurrency(newItems, 3, async (item) => {
+    const savedItem = await saveItemToServer(item);
+    if (items.some((row) => row.id === item.id)) {
+      upsertLocalItem(savedItem);
     }
-  }
+    return savedItem;
+  }, () => {
+    completedCount += 1;
+    setSaveState(`시트 저장 중 (${completedCount}/${newItems.length})`);
+  });
 
   persistLocalFallback();
   render();
+
+  const savedCount = results.filter((result) => result.status === "fulfilled").length;
+  const failedCount = results.length - savedCount;
 
   if (savedCount === newItems.length) {
     setSaveState("저장됨");
@@ -445,7 +445,38 @@ async function saveQuickItemsToServer(newItems) {
   }
 
   setSaveState("일부 저장 실패");
-  setQuickStatus(`${savedCount}개 저장됨, 실패 항목은 화면에 남겨뒀습니다`);
+  setQuickStatus(`${savedCount}개 저장됨, ${failedCount}개 실패. 실패 항목은 목록에 남겨뒀습니다`);
+}
+
+async function runLimitedConcurrency(itemsToRun, limit, worker, onSettled = () => {}) {
+  const results = new Array(itemsToRun.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(limit, itemsToRun.length);
+
+  async function runWorker() {
+    while (nextIndex < itemsToRun.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+
+      try {
+        results[currentIndex] = {
+          status: "fulfilled",
+          value: await worker(itemsToRun[currentIndex], currentIndex),
+        };
+      } catch (error) {
+        console.error(error);
+        results[currentIndex] = {
+          status: "rejected",
+          reason: error,
+        };
+      } finally {
+        onSettled(currentIndex, results[currentIndex]);
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, runWorker));
+  return results;
 }
 
 function render() {
