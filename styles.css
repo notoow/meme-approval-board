@@ -962,6 +962,102 @@ h2 {
   font-weight: 800;
 }
 
+.final-version-box {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.final-version-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.final-version-head strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.final-version-head .secondary-button {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.final-version-list {
+  display: grid;
+  gap: 8px;
+}
+
+.final-version-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 58px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.final-version-row.is-editing {
+  border-color: #9bb8ff;
+  background: #eef4ff;
+}
+
+.final-version-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.final-version-copy strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.final-version-copy strong span,
+.final-version-warning {
+  width: max-content;
+  min-height: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e9efff;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.final-version-warning {
+  background: #fff3e3;
+  color: #a15c00;
+}
+
+.final-version-copy code {
+  overflow: hidden;
+  color: var(--slate);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.final-version-row .secondary-button {
+  min-width: 72px;
+  min-height: 40px;
+  padding: 0 12px;
+}
+
 .final-probe {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -1545,9 +1641,20 @@ h2 {
   .form-grid,
   .modal-actions,
   .quick-add-actions,
+  .final-version-row,
   .final-probe,
   .settings-share {
     grid-template-columns: 1fr;
+  }
+
+  .final-version-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .final-version-head .secondary-button,
+  .final-version-row .secondary-button {
+    width: 100%;
   }
 
   .player-revision-head,

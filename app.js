@@ -49,6 +49,7 @@ let quickSaving = false;
 const statusSavingIds = new Set();
 let activePlayerItemId = "";
 let activePlayerVersionIndex = -1;
+let activeFinalEditIndex = -1;
 
 const els = {
   referenceSidebarButton: document.querySelector("#referenceSidebarButton"),
@@ -83,6 +84,9 @@ const els = {
   finalItemId: document.querySelector("#finalItemId"),
   finalItemTitle: document.querySelector("#finalItemTitle"),
   finalVersionHint: document.querySelector("#finalVersionHint"),
+  finalVersionBox: document.querySelector("#finalVersionBox"),
+  finalVersionList: document.querySelector("#finalVersionList"),
+  newFinalVersionButton: document.querySelector("#newFinalVersionButton"),
   finalUploadUrl: document.querySelector("#finalUploadUrlInput"),
   probeFinalButton: document.querySelector("#probeFinalButton"),
   finalProbeStatus: document.querySelector("#finalProbeStatus"),
@@ -154,6 +158,8 @@ els.finalUploadUrl.addEventListener("input", () => {
 });
 els.closeFinalButton.addEventListener("click", closeFinalUploadDialog);
 els.cancelFinalButton.addEventListener("click", closeFinalUploadDialog);
+els.finalVersionList.addEventListener("click", handleFinalVersionListClick);
+els.newFinalVersionButton.addEventListener("click", () => setFinalUploadMode("add"));
 els.probeFinalButton.addEventListener("click", probeFinalUploadFromDialog);
 els.saveFinalButton.addEventListener("click", () => saveFinalUploadFromForm({ preview: false }));
 els.saveFinalPreviewButton.addEventListener("click", () => saveFinalUploadFromForm({ preview: true }));
@@ -742,13 +748,12 @@ async function saveItemFromForm() {
 }
 
 function openFinalUploadDialog(item) {
-  const nextVersion = getAllowedFinalVersions(item).length + 1;
   els.finalItemId.value = item.id;
   els.finalItemTitle.textContent = item.title || "제작 제목 없음";
-  els.finalVersionHint.textContent = `이번 업로드는 v${nextVersion}로 저장됩니다. NAS 완성본 경로만 입력해 주세요.`;
-  els.finalUploadUrl.value = "";
   els.finalComplete.checked = false;
   els.finalUploadUrl.setCustomValidity("");
+  renderFinalVersionEditorList(item);
+  setFinalUploadMode("add");
   setFinalProbeStatus("저장 전에 파일 접근을 확인할 수 있습니다");
   els.finalDialog.showModal();
   window.setTimeout(() => {
@@ -757,6 +762,7 @@ function openFinalUploadDialog(item) {
 }
 
 function closeFinalUploadDialog() {
+  activeFinalEditIndex = -1;
   els.finalDialog.close();
 }
 
@@ -771,16 +777,22 @@ async function saveFinalUploadFromForm(options = {}) {
   els.saveFinalButton.disabled = true;
   els.saveFinalPreviewButton.disabled = true;
 
-  const versions = getAllowedFinalVersions(current);
-  const nextVersion = {
-    label: `v${versions.length + 1}`,
-    url: uploadUrl,
-  };
+  const versions = getFinalVersions(current);
+  const isEditing = activeFinalEditIndex >= 0 && activeFinalEditIndex < versions.length;
+  const nextVersions = isEditing
+    ? versions.map((version, index) => index === activeFinalEditIndex
+      ? { ...version, url: uploadUrl }
+      : version)
+    : [...versions, {
+      label: nextFinalVersionLabel(versions),
+      url: uploadUrl,
+    }];
+  const previewIndex = isEditing ? activeFinalEditIndex : nextVersions.length - 1;
 
   const updated = {
     ...current,
-    uploadUrl: serializeFinalVersions([...versions, nextVersion]),
-    status: statusAfterFinalUpload(current.status, els.finalComplete.checked),
+    uploadUrl: serializeFinalVersions(nextVersions),
+    status: statusAfterFinalUpload(current.status, els.finalComplete.checked, isEditing),
     updatedAt: new Date().toISOString(),
     updatedBy: settings.userName || current.updatedBy || "",
   };
@@ -792,12 +804,75 @@ async function saveFinalUploadFromForm(options = {}) {
     els.finalDialog.close();
 
     if (options.preview) {
-      openPlayerDialog(items.find((item) => item.id === id) || updated);
+      openPlayerDialog(items.find((item) => item.id === id) || updated, previewIndex);
     }
   } finally {
     els.saveFinalButton.disabled = false;
     els.saveFinalPreviewButton.disabled = false;
   }
+}
+
+function handleFinalVersionListClick(event) {
+  const button = event.target.closest("[data-final-edit-index]");
+  if (!button) return;
+  setFinalUploadMode("edit", Number(button.dataset.finalEditIndex));
+}
+
+function renderFinalVersionEditorList(item) {
+  const versions = getFinalVersions(item);
+  els.finalVersionBox.hidden = versions.length === 0;
+
+  if (versions.length === 0) {
+    els.finalVersionList.innerHTML = "";
+    return;
+  }
+
+  els.finalVersionList.innerHTML = versions
+    .map((version, index) => {
+      const isLatest = index === versions.length - 1;
+      const allowedText = isAllowedFinalUploadPath(version.url) ? "" : `<span class="final-version-warning">교체 필요</span>`;
+      return `
+        <div class="final-version-row" data-final-version-index="${index}">
+          <div class="final-version-copy">
+            <strong>${escapeHtml(version.label || `v${index + 1}`)}${isLatest ? `<span>최신</span>` : ""}</strong>
+            <code title="${escapeAttr(version.url)}">${escapeHtml(formatFinalPathLabel(version.url))}</code>
+            ${allowedText}
+          </div>
+          <button class="secondary-button" type="button" data-final-edit-index="${index}">수정</button>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function setFinalUploadMode(mode, versionIndex = -1) {
+  const item = items.find((row) => row.id === els.finalItemId.value);
+  const versions = item ? getFinalVersions(item) : [];
+  const isEditing = mode === "edit" && versionIndex >= 0 && versionIndex < versions.length;
+
+  activeFinalEditIndex = isEditing ? versionIndex : -1;
+
+  if (isEditing) {
+    const version = versions[versionIndex];
+    els.finalUploadUrl.value = version.url || "";
+    els.finalVersionHint.textContent = `${version.label || `v${versionIndex + 1}`} 링크를 수정 중입니다. 저장하면 기존 링크를 덮어씁니다.`;
+    els.saveFinalButton.textContent = "수정 저장";
+    els.saveFinalPreviewButton.textContent = "수정 저장 후 미리보기";
+    setFinalProbeStatus(isAllowedFinalUploadPath(version.url)
+      ? "수정할 NAS 경로를 확인할 수 있습니다"
+      : "기존 링크를 NAS 완성본 경로로 바꿔 저장해 주세요");
+  } else {
+    els.finalUploadUrl.value = "";
+    els.finalVersionHint.textContent = `이번 업로드는 ${nextFinalVersionLabel(versions)}로 저장됩니다. NAS 완성본 경로만 입력해 주세요.`;
+    els.saveFinalButton.textContent = "저장";
+    els.saveFinalPreviewButton.textContent = "저장 후 미리보기";
+    setFinalProbeStatus("저장 전에 파일 접근을 확인할 수 있습니다");
+  }
+
+  els.finalUploadUrl.setCustomValidity("");
+  els.finalVersionList.querySelectorAll("[data-final-version-index]").forEach((row) => {
+    row.classList.toggle("is-editing", Number(row.dataset.finalVersionIndex) === activeFinalEditIndex);
+  });
 }
 
 async function probeFinalUploadFromDialog() {
@@ -931,9 +1006,10 @@ function formatFileSize(size) {
   return `${next.toFixed(next >= 10 || unitIndex === 0 ? 0 : 1)}${units[unitIndex]}`;
 }
 
-function statusAfterFinalUpload(status, isComplete = false) {
+function statusAfterFinalUpload(status, isComplete = false, isEditing = false) {
   const normalized = normalizeStatus(status);
   if (normalized === "보류") return normalized;
+  if (isEditing && !isComplete) return normalized;
   return isComplete ? "작업완료" : "수정중";
 }
 
@@ -1702,6 +1778,28 @@ function getFinalVersions(item) {
 
 function getAllowedFinalVersions(item) {
   return getFinalVersions(item).filter((version) => isAllowedFinalUploadPath(version.url));
+}
+
+function nextFinalVersionLabel(versions) {
+  const numbers = versions
+    .map((version) => String(version.label || "").match(/^v(\d+)$/i))
+    .filter(Boolean)
+    .map((match) => Number(match[1]))
+    .filter(Number.isFinite);
+  const next = numbers.length > 0 ? Math.max(...numbers) + 1 : versions.length + 1;
+  return `v${next}`;
+}
+
+function formatFinalPathLabel(url) {
+  const value = normalizeFinalUploadPath(url);
+  if (!value) return "링크 없음";
+
+  if (isNasFilePath(value)) {
+    const parts = value.split("\\").filter(Boolean);
+    return parts[parts.length - 1] || value;
+  }
+
+  return formatSourceLabel(value);
 }
 
 function parseJsonFinalVersions(value) {
