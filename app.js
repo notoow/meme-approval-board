@@ -1,6 +1,9 @@
 const STORAGE_KEY = "meme-board-settings";
 const LOCAL_DATA_KEY = "meme-board-local-data";
 const DEFAULT_NAS_STREAM_URL = "http://127.0.0.1:8787";
+const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwZA8xb2hreRSbnthEMp5KmhvOnknT7d6z9w3Y7oXwbqQnNxbRQ6FkPy_xQ3UkrSNxhbQ/exec";
+const DEFAULT_API_SECRET = "meme-a00d1da9";
+const DEFAULT_USER_NAME = "공유 사용자";
 const FINAL_UPLOAD_PREFIX = "\\\\192.168.0.10\\highst_영상팀\\@종편,클린본,콜렉트\\숏폼\\밈 나스링크";
 const FINAL_UPLOAD_HELP = `${FINAL_UPLOAD_PREFIX}\\파일명.mp4 형식만 입력해 주세요.`;
 const REFERENCE_MARKER = "__reference_link__";
@@ -1314,7 +1317,7 @@ function openSettings() {
   els.nasStreamUrlInput.value = settings.nasStreamUrl || DEFAULT_NAS_STREAM_URL;
   els.apiSecretInput.value = settings.apiSecret || "";
   els.userNameInput.value = settings.userName || "";
-  els.shareLinkStatus.textContent = "담당자 이름까지 포함해서 복사됩니다";
+  els.shareLinkStatus.textContent = "기본 연결값으로 바로 사용할 수 있습니다";
   els.settingsDialog.showModal();
 }
 
@@ -1326,12 +1329,12 @@ async function saveSettingsFromDialog() {
 }
 
 function readSettingsForm() {
-  return {
+  return mergeSettings({
     apiUrl: els.apiUrlInput.value.trim(),
     nasStreamUrl: normalizeNasStreamUrl(els.nasStreamUrlInput.value.trim()),
     apiSecret: els.apiSecretInput.value.trim(),
     userName: els.userNameInput.value.trim(),
-  };
+  });
 }
 
 async function testSettingsConnection() {
@@ -1370,8 +1373,8 @@ async function createSettingsShareLink() {
   const apiSecret = els.apiSecretInput.value.trim();
   const userName = els.userNameInput.value.trim();
 
-  if (!apiUrl || !apiSecret || !userName) {
-    els.shareLinkStatus.textContent = "URL, 비밀번호, 담당자 이름을 모두 입력해 주세요";
+  if (!apiUrl || !apiSecret) {
+    els.shareLinkStatus.textContent = "URL과 비밀번호를 확인해 주세요";
     return;
   }
 
@@ -1411,7 +1414,7 @@ async function copyText(text) {
 }
 
 function clearSettings() {
-  if (!confirm("연결 설정을 지울까요? 샘플 화면으로 돌아갑니다.")) return;
+  if (!confirm("개인 설정을 지우고 기본 연결값으로 돌아갈까요?")) return;
   localStorage.removeItem(STORAGE_KEY);
   settings = loadSettings();
   els.settingsDialog.close();
@@ -1420,9 +1423,9 @@ function clearSettings() {
 
 function loadSettings() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    return mergeSettings(JSON.parse(localStorage.getItem(STORAGE_KEY)) || {});
   } catch {
-    return {};
+    return mergeSettings();
   }
 }
 
@@ -1433,18 +1436,27 @@ function applySharedSettings(saved) {
   const apiSecret = params.get("apiSecret") || params.get("secret");
   const userName = params.get("userName") || params.get("user");
 
-  if (!apiUrl && !nasStreamUrl && !apiSecret && !userName) return saved;
+  if (!apiUrl && !nasStreamUrl && !apiSecret && !userName) return mergeSettings(saved);
 
-  const next = {
+  const next = mergeSettings({
     ...saved,
-    apiUrl: apiUrl || saved.apiUrl || "",
-    nasStreamUrl: normalizeNasStreamUrl(nasStreamUrl || saved.nasStreamUrl || ""),
-    apiSecret: apiSecret || saved.apiSecret || "",
-    userName: userName || saved.userName || "",
-  };
+    apiUrl: apiUrl || saved.apiUrl,
+    nasStreamUrl: nasStreamUrl || saved.nasStreamUrl,
+    apiSecret: apiSecret || saved.apiSecret,
+    userName: userName || saved.userName,
+  });
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
   return next;
+}
+
+function mergeSettings(overrides = {}) {
+  return {
+    apiUrl: String(overrides.apiUrl || DEFAULT_API_URL).trim(),
+    nasStreamUrl: normalizeNasStreamUrl(overrides.nasStreamUrl || DEFAULT_NAS_STREAM_URL),
+    apiSecret: String(overrides.apiSecret || DEFAULT_API_SECRET).trim(),
+    userName: String(overrides.userName || DEFAULT_USER_NAME).trim(),
+  };
 }
 
 function hasApiSettings() {
