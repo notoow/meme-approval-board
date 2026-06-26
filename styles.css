@@ -427,16 +427,29 @@ h2 { font-size: 18px; font-weight: 700; }
   border-radius: var(--radius-lg);
 }
 .table-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 14px;
   padding: 16px 20px;
   border-bottom: 1px solid var(--line);
 }
 .table-head h2 { font-size: 15px; }
 .table-head p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
-.save-state { min-width: 80px; color: var(--muted); font-size: 12px; font-weight: 600; text-align: right; }
+.save-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--elevated);
+  color: var(--slate);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
 
 .desktop-table-wrap { overflow-x: visible; }
 .content-table {
@@ -672,15 +685,15 @@ h2 { font-size: 18px; font-weight: 700; }
 
 .row-actions {
   display: grid;
-  grid-template-columns: minmax(104px, 1fr) minmax(86px, 0.8fr) minmax(112px, 1fr) 34px max-content;
+  grid-template-columns: minmax(92px, 0.9fr) minmax(76px, 0.7fr) minmax(96px, 0.9fr) 32px max-content;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   min-width: 0;
 }
 .row-button {
   min-height: 32px;
-  padding: 0 10px;
+  padding: 0 8px;
   background: var(--elevated);
   border-color: var(--line);
   color: var(--slate);
@@ -692,6 +705,8 @@ h2 { font-size: 18px; font-weight: 700; }
   transition: background var(--t), color var(--t), border-color var(--t);
 }
 .row-actions .row-button { width: 100%; }
+.row-actions .final-thumb-button,
+.row-actions .final-thumb-empty { justify-self: end; }
 .row-button:hover { background: var(--hover); color: var(--text); border-color: var(--line-strong); }
 .row-button:disabled { cursor: not-allowed; opacity: 0.4; }
 
@@ -764,6 +779,10 @@ h2 { font-size: 18px; font-weight: 700; }
   border-radius: 8px;
   background: var(--elevated);
 }
+.final-thumb-empty {
+  width: 84px;
+  height: var(--thumb-landscape-h);
+}
 .final-thumb-button { padding: 0; color: var(--text); cursor: pointer; }
 .final-thumb-button.is-portrait,
 .final-thumb-empty.is-portrait {
@@ -825,6 +844,18 @@ h2 { font-size: 18px; font-weight: 700; }
 .mobile-actions .row-button.delete { width: auto; }
 .mobile-actions .final-thumb-button,
 .mobile-actions .final-thumb-empty { width: 100%; height: 88px; }
+.mobile-actions .final-thumb-button.is-portrait,
+.mobile-actions .final-thumb-empty.is-portrait {
+  width: var(--thumb-portrait-w);
+  height: var(--thumb-portrait-h);
+  justify-self: start;
+}
+.mobile-actions .final-thumb-button.is-square,
+.mobile-actions .final-thumb-empty.is-square {
+  width: var(--thumb-square);
+  height: var(--thumb-square);
+  justify-self: start;
+}
 
 /* ─────────────────────────────────────────
    EMPTY STATE
@@ -1377,8 +1408,12 @@ h2 { font-size: 18px; font-weight: 700; }
   .quick-add { grid-template-columns: 1fr; }
   .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .search-box { min-width: 0; width: 100%; }
-  .desktop-table-wrap { overflow-x: auto; }
-  .content-table { min-width: 1080px; }
+}
+@media (max-width: 1100px) {
+  .desktop-table-wrap { display: none; }
+  .mobile-list { display: block; }
+  .table-head { grid-template-columns: 1fr; align-items: start; }
+  .save-state { justify-self: start; }
 }
 @media (max-width: 900px) {
   .player-card { grid-template-columns: 1fr; }
@@ -1390,10 +1425,8 @@ h2 { font-size: 18px; font-weight: 700; }
   .topbar-actions .primary-button { grid-column: span 2; }
   .summary-box { min-height: 82px; padding: 12px 14px; }
   .summary-box strong { font-size: 28px; }
-  .desktop-table-wrap { display: none; }
-  .mobile-list { display: block; }
-  .table-head { align-items: flex-start; flex-direction: column; }
-  .save-state { text-align: left; }
+  .table-head { grid-template-columns: 1fr; align-items: start; }
+  .save-state { justify-self: start; }
   .form-grid,
   .modal-actions,
   .quick-add-actions,
