@@ -2001,10 +2001,36 @@ function normalizeFinalPathForCompare(value) {
   return normalizeFinalUploadPath(value).replace(/\\+$/, "").toLowerCase();
 }
 
+function setPreviewMediaShape(media) {
+  const holder = media.closest(".thumb, .final-thumb-button, .player-body");
+  if (!holder) return;
+
+  const width = media.naturalWidth || media.videoWidth || 0;
+  const height = media.naturalHeight || media.videoHeight || 0;
+  holder.classList.remove("is-landscape", "is-portrait", "is-square");
+
+  if (!width || !height) return;
+
+  const ratio = width / height;
+  if (ratio > 1.12) {
+    holder.classList.add("is-landscape");
+  } else if (ratio < 0.9) {
+    holder.classList.add("is-portrait");
+  } else {
+    holder.classList.add("is-square");
+  }
+}
+
+function handlePreviewMediaError(media, fallbackClass) {
+  const holder = media.closest(".thumb, .final-thumb-button, .player-body");
+  media.remove();
+  holder?.classList.add(fallbackClass);
+}
+
 function renderThumb(item) {
   const imageUrl = item.thumbnail || youtubeThumbnail(item.sourceUrl);
   if (imageUrl) {
-    return `<span class="thumb"><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy" onerror="const parent=this.parentElement; this.remove(); parent?.classList.add('thumb-fallback')"></span>`;
+    return `<span class="thumb"><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy" onload="setPreviewMediaShape(this)" onerror="handlePreviewMediaError(this, 'thumb-fallback')"></span>`;
   }
   return `<span class="thumb thumb-fallback">썸네일 없음</span>`;
 }
@@ -2051,7 +2077,7 @@ function renderFinalThumbMedia(url) {
 
   if (youtubeId) {
     return `
-      <img class="final-thumb-media" src="${escapeAttr(youtubeThumbnail(normalized))}" alt="" loading="lazy" onerror="this.parentElement.classList.add('is-fallback')" />
+      <img class="final-thumb-media" src="${escapeAttr(youtubeThumbnail(normalized))}" alt="" loading="lazy" onload="setPreviewMediaShape(this)" onerror="handlePreviewMediaError(this, 'is-fallback')" />
       <span class="final-thumb-fallback">완성본</span>
     `;
   }
@@ -2059,14 +2085,14 @@ function renderFinalThumbMedia(url) {
   if (isAllowedFinalUploadPath(normalized)) {
     const mediaUrl = buildNasStreamUrl(normalized);
     return `
-      <video class="final-thumb-media" src="${escapeAttr(mediaUrl)}" preload="metadata" muted playsinline onloadedmetadata="this.currentTime = Math.min(0.1, this.duration || 0.1)" onerror="this.parentElement.classList.add('is-fallback')"></video>
+      <video class="final-thumb-media" src="${escapeAttr(mediaUrl)}" preload="metadata" muted playsinline onloadedmetadata="setPreviewMediaShape(this); this.currentTime = Math.min(0.1, this.duration || 0.1)" onerror="handlePreviewMediaError(this, 'is-fallback')"></video>
       <span class="final-thumb-fallback">완성본</span>
     `;
   }
 
   if (/^https?:\/\//i.test(normalized) && isDirectVideoUrl(normalized)) {
     return `
-      <video class="final-thumb-media" src="${escapeAttr(normalized)}" preload="metadata" muted playsinline onloadedmetadata="this.currentTime = Math.min(0.1, this.duration || 0.1)" onerror="this.parentElement.classList.add('is-fallback')"></video>
+      <video class="final-thumb-media" src="${escapeAttr(normalized)}" preload="metadata" muted playsinline onloadedmetadata="setPreviewMediaShape(this); this.currentTime = Math.min(0.1, this.duration || 0.1)" onerror="handlePreviewMediaError(this, 'is-fallback')"></video>
       <span class="final-thumb-fallback">완성본</span>
     `;
   }
@@ -2259,7 +2285,7 @@ function buildPlayerEmbed(rawUrl) {
     return {
       openUrl: streamUrl,
       html: `
-        <video class="player-video" src="${escapeAttr(streamUrl)}" controls autoplay playsinline></video>
+        <video class="player-video" src="${escapeAttr(streamUrl)}" controls autoplay playsinline onloadedmetadata="setPreviewMediaShape(this)"></video>
         <p class="player-hint">NAS 경로를 스트리밍 서버로 연결했습니다. 재생이 안 되면 NAS 스트리밍 서버가 켜져 있는지 확인해 주세요.</p>
       `,
     };
@@ -2284,7 +2310,7 @@ function buildPlayerEmbed(rawUrl) {
   if (isDirectVideoUrl(url)) {
     return {
       openUrl: url,
-      html: `<video class="player-video" src="${escapedUrl}" controls autoplay playsinline></video>`,
+      html: `<video class="player-video" src="${escapedUrl}" controls autoplay playsinline onloadedmetadata="setPreviewMediaShape(this)"></video>`,
     };
   }
 
