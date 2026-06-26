@@ -2001,15 +2001,30 @@ function normalizeFinalPathForCompare(value) {
   return normalizeFinalUploadPath(value).replace(/\\+$/, "").toLowerCase();
 }
 
+function applyPreviewShape(holder, shape) {
+  if (!holder || !shape) return;
+  holder.classList.remove("is-landscape", "is-portrait", "is-square");
+  holder.classList.add(`is-${shape}`);
+}
+
 function setPreviewMediaShape(media) {
   const holder = media.closest(".thumb, .final-thumb-button, .player-body");
   if (!holder) return;
+
+  const shapeHint = media.dataset.shapeHint || holder.dataset.shapeHint || "";
+  if (shapeHint && media.tagName === "IMG") {
+    applyPreviewShape(holder, shapeHint);
+    return;
+  }
 
   const width = media.naturalWidth || media.videoWidth || 0;
   const height = media.naturalHeight || media.videoHeight || 0;
   holder.classList.remove("is-landscape", "is-portrait", "is-square");
 
-  if (!width || !height) return;
+  if (!width || !height) {
+    applyPreviewShape(holder, shapeHint);
+    return;
+  }
 
   const ratio = width / height;
   if (ratio > 1.12) {
@@ -2027,12 +2042,39 @@ function handlePreviewMediaError(media, fallbackClass) {
   holder?.classList.add(fallbackClass);
 }
 
+function sourcePreviewShape(item) {
+  const url = String(item?.sourceUrl || "").toLowerCase();
+  if (url.includes("instagram.com/reel/") || url.includes("instagram.com/reels/")) return "portrait";
+  if (url.includes("tiktok.com/")) return "portrait";
+  if (url.includes("youtube.com/shorts/")) return "portrait";
+  return "";
+}
+
+function finalPreviewShape(url) {
+  const normalized = normalizeFinalUploadPath(url);
+  const lower = normalized.toLowerCase();
+  if (lower.includes("instagram.com/reel/") || lower.includes("instagram.com/reels/")) return "portrait";
+  if (lower.includes("tiktok.com/")) return "portrait";
+  if (lower.includes("youtube.com/shorts/")) return "portrait";
+  if (isDirectVideoUrl(normalized) || isAllowedFinalUploadPath(normalized)) return "portrait";
+  return "";
+}
+
+function shapeClass(shape) {
+  return shape ? ` is-${shape}` : "";
+}
+
+function shapeDataAttr(shape) {
+  return shape ? ` data-shape-hint="${escapeAttr(shape)}"` : "";
+}
+
 function renderThumb(item) {
   const imageUrl = item.thumbnail || youtubeThumbnail(item.sourceUrl);
+  const shape = sourcePreviewShape(item);
   if (imageUrl) {
-    return `<span class="thumb"><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy" onload="setPreviewMediaShape(this)" onerror="handlePreviewMediaError(this, 'thumb-fallback')"></span>`;
+    return `<span class="thumb${shapeClass(shape)}"${shapeDataAttr(shape)}><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy"${shapeDataAttr(shape)} onload="setPreviewMediaShape(this)" onerror="handlePreviewMediaError(this, 'thumb-fallback')"></span>`;
   }
-  return `<span class="thumb thumb-fallback">썸네일 없음</span>`;
+  return `<span class="thumb thumb-fallback${shapeClass(shape)}"${shapeDataAttr(shape)}>썸네일 없음</span>`;
 }
 
 function renderVideoInfo(item) {
@@ -2063,8 +2105,9 @@ function renderFinalThumb(item) {
     return `<span class="final-thumb-empty" title="완성본 없음">없음</span>`;
   }
 
+  const shape = finalPreviewShape(latest.url);
   return `
-    <button class="final-thumb-button" type="button" data-action="play" data-id="${escapeAttr(item.id)}" aria-label="최신 완성본 ${escapeAttr(latest.label)} 미리보기">
+    <button class="final-thumb-button${shapeClass(shape)}" type="button" data-action="play" data-id="${escapeAttr(item.id)}" aria-label="최신 완성본 ${escapeAttr(latest.label)} 미리보기"${shapeDataAttr(shape)}>
       ${renderFinalThumbMedia(latest.url)}
       <span class="final-thumb-version">${escapeHtml(latest.label)}</span>
     </button>
@@ -2074,10 +2117,11 @@ function renderFinalThumb(item) {
 function renderFinalThumbMedia(url) {
   const normalized = normalizeFinalUploadPath(url);
   const youtubeId = youtubeVideoId(normalized);
+  const shape = finalPreviewShape(normalized);
 
   if (youtubeId) {
     return `
-      <img class="final-thumb-media" src="${escapeAttr(youtubeThumbnail(normalized))}" alt="" loading="lazy" onload="setPreviewMediaShape(this)" onerror="handlePreviewMediaError(this, 'is-fallback')" />
+      <img class="final-thumb-media" src="${escapeAttr(youtubeThumbnail(normalized))}" alt="" loading="lazy"${shapeDataAttr(shape)} onload="setPreviewMediaShape(this)" onerror="handlePreviewMediaError(this, 'is-fallback')" />
       <span class="final-thumb-fallback">완성본</span>
     `;
   }
@@ -2085,14 +2129,14 @@ function renderFinalThumbMedia(url) {
   if (isAllowedFinalUploadPath(normalized)) {
     const mediaUrl = buildNasStreamUrl(normalized);
     return `
-      <video class="final-thumb-media" src="${escapeAttr(mediaUrl)}" preload="metadata" muted playsinline onloadedmetadata="setPreviewMediaShape(this); this.currentTime = Math.min(0.1, this.duration || 0.1)" onerror="handlePreviewMediaError(this, 'is-fallback')"></video>
+      <video class="final-thumb-media" src="${escapeAttr(mediaUrl)}" preload="metadata" muted playsinline${shapeDataAttr(shape)} onloadedmetadata="setPreviewMediaShape(this); this.currentTime = Math.min(0.1, this.duration || 0.1)" onerror="handlePreviewMediaError(this, 'is-fallback')"></video>
       <span class="final-thumb-fallback">완성본</span>
     `;
   }
 
   if (/^https?:\/\//i.test(normalized) && isDirectVideoUrl(normalized)) {
     return `
-      <video class="final-thumb-media" src="${escapeAttr(normalized)}" preload="metadata" muted playsinline onloadedmetadata="setPreviewMediaShape(this); this.currentTime = Math.min(0.1, this.duration || 0.1)" onerror="handlePreviewMediaError(this, 'is-fallback')"></video>
+      <video class="final-thumb-media" src="${escapeAttr(normalized)}" preload="metadata" muted playsinline${shapeDataAttr(shape)} onloadedmetadata="setPreviewMediaShape(this); this.currentTime = Math.min(0.1, this.duration || 0.1)" onerror="handlePreviewMediaError(this, 'is-fallback')"></video>
       <span class="final-thumb-fallback">완성본</span>
     `;
   }

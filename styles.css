@@ -478,7 +478,7 @@ h2 { font-size: 18px; font-weight: 700; }
 ───────────────────────────────────────── */
 .video-cell {
   display: grid;
-  grid-template-columns: var(--thumb-landscape-w) minmax(220px, 1fr);
+  grid-template-columns: max-content minmax(220px, 1fr);
   align-items: center;
   gap: 14px;
   min-width: 0;
@@ -672,7 +672,7 @@ h2 { font-size: 18px; font-weight: 700; }
 
 .row-actions {
   display: grid;
-  grid-template-columns: minmax(104px, 1fr) minmax(86px, 0.8fr) minmax(112px, 1fr) 34px var(--thumb-landscape-w);
+  grid-template-columns: minmax(104px, 1fr) minmax(86px, 0.8fr) minmax(112px, 1fr) 34px max-content;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -811,7 +811,7 @@ h2 { font-size: 18px; font-weight: 700; }
 ───────────────────────────────────────── */
 .mobile-list { display: none; }
 .mobile-card { padding: 14px 16px; border-bottom: 1px solid var(--line); }
-.mobile-main { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; }
+.mobile-main { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 12px; align-items: center; }
 .mobile-info { display: grid; gap: 7px; min-width: 0; }
 .mobile-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .mobile-tags .status-select { width: 100%; max-width: 220px; }
@@ -1413,7 +1413,7 @@ h2 { font-size: 18px; font-weight: 700; }
   .quick-field { grid-column: 1 / -1; }
   .quick-remove-button { grid-column: 2; grid-row: 1; width: 36px; height: 36px; }
   .span-2 { grid-column: span 1; }
-  .mobile-main { grid-template-columns: 156px minmax(0, 1fr); align-items: center; }
+  .mobile-main { grid-template-columns: max-content minmax(0, 1fr); align-items: center; }
   .thumb { justify-self: start; width: 156px; height: 88px; aspect-ratio: 16 / 9; }
   .thumb.is-portrait { width: 84px; height: 150px; aspect-ratio: 9 / 16; }
   .thumb.is-square { width: 112px; height: 112px; aspect-ratio: 1; }
@@ -1437,7 +1437,7 @@ h2 { font-size: 18px; font-weight: 700; }
 }
 @media (max-width: 430px) {
   .mobile-card { padding: 12px 12px; }
-  .mobile-main { grid-template-columns: 136px minmax(0, 1fr); gap: 10px; }
+  .mobile-main { grid-template-columns: max-content minmax(0, 1fr); gap: 10px; }
   .thumb { width: 136px; height: 77px; }
   .thumb.is-portrait { width: 72px; height: 128px; }
   .thumb.is-square { width: 96px; height: 96px; }
