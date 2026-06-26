@@ -7,6 +7,30 @@ const DEFAULT_USER_NAME = "공유 사용자";
 const FINAL_UPLOAD_PREFIX = "\\\\192.168.0.10\\highst_영상팀\\@종편,클린본,콜렉트\\숏폼\\밈 나스링크";
 const FINAL_UPLOAD_HELP = `${FINAL_UPLOAD_PREFIX}\\파일명.mp4 형식만 입력해 주세요.`;
 const REFERENCE_MARKER = "__reference_link__";
+const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+const YOUTUBE_THUMBNAIL_QUALITY_ORDER = [
+  "maxresdefault",
+  "hq720",
+  "sddefault",
+  "hqdefault",
+  "mqdefault",
+  "default",
+];
+const YOUTUBE_ALLOWED_HOSTS = new Set([
+  "youtube.com",
+  "www.youtube.com",
+  "m.youtube.com",
+  "music.youtube.com",
+  "youtube-nocookie.com",
+  "www.youtube-nocookie.com",
+  "youtu.be",
+  "www.youtu.be",
+]);
+const SUPPORTED_MEDIA_HOSTS = [
+  ["유튜브", ["youtube.com", "youtu.be", "youtube-nocookie.com", "m.youtube.com", "music.youtube.com"]],
+  ["인스타", ["instagram.com"]],
+  ["틱톡", ["tiktok.com", "vm.tiktok.com", "m.tiktok.com"]],
+];
 
 const STATUS_CLASS = {
   "촬영필요": "status-wait",
@@ -1724,7 +1748,7 @@ function createQuickTitle(url, platform, title = "") {
 }
 
 function extractUrls(text) {
-  const pattern = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|youtube\.com|youtu\.be|tiktok\.com)\/[^\s<>"']+/gi;
+  const pattern = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|youtube\.com|m\.youtube\.com|music\.youtube\.com|youtube-nocookie\.com|youtu\.be|tiktok\.com|vm\.tiktok\.com|m\.tiktok\.com)\/[^\s<>"']+/gi;
   const matches = String(text || "").match(pattern) || [];
   const seen = new Set();
   const urls = [];
@@ -2042,6 +2066,54 @@ function handlePreviewMediaError(media, fallbackClass) {
   holder?.classList.add(fallbackClass);
 }
 
+function handlePreviewImageError(image, fallbackClass) {
+  const sources = decodeImageSources(image.dataset.sources);
+  const currentIndex = Number(image.dataset.sourceIndex || 0);
+  const nextSource = sources[currentIndex + 1];
+
+  if (nextSource) {
+    image.dataset.sourceIndex = String(currentIndex + 1);
+    image.src = nextSource;
+    return;
+  }
+
+  handlePreviewMediaError(image, fallbackClass);
+}
+
+function decodeImageSources(value) {
+  if (!value) return [];
+
+  try {
+    const parsed = JSON.parse(decodeURIComponent(value));
+    return Array.isArray(parsed)
+      ? parsed.map((source) => String(source || "").trim()).filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function imageSourcesDataAttr(sources) {
+  const cleaned = uniqueStrings(sources);
+  return cleaned.length > 1
+    ? ` data-sources="${escapeAttr(encodeURIComponent(JSON.stringify(cleaned)))}" data-source-index="0"`
+    : "";
+}
+
+function uniqueStrings(values) {
+  const seen = new Set();
+  const uniqueValues = [];
+
+  values.forEach((value) => {
+    const normalized = String(value || "").trim();
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    uniqueValues.push(normalized);
+  });
+
+  return uniqueValues;
+}
+
 function sourcePreviewShape(item) {
   const url = String(item?.sourceUrl || "").toLowerCase();
   if (url.includes("instagram.com/reel/") || url.includes("instagram.com/reels/")) return "portrait";
@@ -2069,12 +2141,30 @@ function shapeDataAttr(shape) {
 }
 
 function renderThumb(item) {
-  const imageUrl = item.thumbnail || youtubeThumbnail(item.sourceUrl);
+  const imageSources = getSourceThumbnailSources(item);
+  const imageUrl = imageSources[0];
   const shape = sourcePreviewShape(item);
   if (imageUrl) {
-    return `<span class="thumb${shapeClass(shape)}"${shapeDataAttr(shape)}><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy"${shapeDataAttr(shape)} onload="setPreviewMediaShape(this)" onerror="handlePreviewMediaError(this, 'thumb-fallback')"></span>`;
+    return `<span class="thumb${shapeClass(shape)}"${shapeDataAttr(shape)}><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy"${shapeDataAttr(shape)}${imageSourcesDataAttr(imageSources)} onload="setPreviewMediaShape(this)" onerror="handlePreviewImageError(this, 'thumb-fallback')"></span>`;
   }
   return `<span class="thumb thumb-fallback${shapeClass(shape)}"${shapeDataAttr(shape)}>썸네일 없음</span>`;
+}
+
+function getSourceThumbnailSources(item) {
+  const thumbnail = String(item?.thumbnail || "").trim();
+  const youtubeSources = youtubeThumbnailSources(item?.sourceUrl || "");
+
+  if (thumbnail && isYoutubeThumbnailForVideo(thumbnail, item?.sourceUrl || "")) {
+    return uniqueStrings([
+      ...youtubeSources,
+      thumbnail,
+    ]);
+  }
+
+  return uniqueStrings([
+    thumbnail,
+    ...youtubeSources,
+  ]);
 }
 
 function renderVideoInfo(item) {
@@ -2120,8 +2210,9 @@ function renderFinalThumbMedia(url) {
   const shape = finalPreviewShape(normalized);
 
   if (youtubeId) {
+    const sources = youtubeThumbnailSources(normalized);
     return `
-      <img class="final-thumb-media" src="${escapeAttr(youtubeThumbnail(normalized))}" alt="" loading="lazy"${shapeDataAttr(shape)} onload="setPreviewMediaShape(this)" onerror="handlePreviewMediaError(this, 'is-fallback')" />
+      <img class="final-thumb-media" src="${escapeAttr(sources[0] || youtubeThumbnail(normalized))}" alt="" loading="lazy"${shapeDataAttr(shape)}${imageSourcesDataAttr(sources)} onload="setPreviewMediaShape(this)" onerror="handlePreviewImageError(this, 'is-fallback')" />
       <span class="final-thumb-fallback">완성본</span>
     `;
   }
@@ -2337,12 +2428,13 @@ function buildPlayerEmbed(rawUrl) {
 
   const youtubeId = youtubeVideoId(url);
   if (youtubeId) {
+    const embedUrl = buildYoutubePreviewEmbedUrl(youtubeId);
     return {
-      openUrl: url,
+      openUrl: buildYoutubeWatchUrl(youtubeId) || url,
       html: `
         <iframe
           class="player-frame"
-          src="https://www.youtube.com/embed/${escapeAttr(youtubeId)}"
+          src="${escapeAttr(embedUrl)}"
           title="YouTube video player"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowfullscreen
@@ -2557,40 +2649,170 @@ function isThisWeek(date) {
 }
 
 function inferPlatform(url) {
-  const lower = String(url || "").toLowerCase();
-  if (lower.includes("youtube.com") || lower.includes("youtu.be")) return "유튜브";
-  if (lower.includes("instagram.com")) return "인스타";
-  if (lower.includes("tiktok.com")) return "틱톡";
-  return "기타";
+  const parsed = parseHttpUrl(url);
+  if (!parsed) return "기타";
+  return resolvePlatformFromHostname(parsed.hostname) || "기타";
 }
 
 function canonicalizeSourceUrl(url) {
-  const value = String(url || "").trim();
-  if (!value) return "";
+  const parsed = parseHttpUrl(url);
+  if (!parsed) return "";
 
-  let normalized = /^https?:\/\//i.test(value) ? value : `https://${value}`;
-  normalized = normalized.replace("instagram.com/reels/", "instagram.com/reel/");
-  normalized = normalized.replace("www.instagram.com/reels/", "www.instagram.com/reel/");
-  return normalized;
+  parsed.hash = "";
+  if (parsed.hostname.toLowerCase().endsWith("instagram.com")) {
+    parsed.pathname = parsed.pathname.replace(/^\/reels\//i, "/reel/");
+  }
+
+  return parsed.toString();
+}
+
+function parseHttpUrl(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed || trimmed.startsWith("//") || /[\s\\\u0000-\u001f\u007f]/.test(trimmed)) return null;
+
+  try {
+    const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    if (!["http:", "https:"].includes(parsed.protocol)) return null;
+    if (parsed.username || parsed.password) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function resolvePlatformFromHostname(hostname) {
+  const normalizedHostname = String(hostname || "").trim().toLowerCase();
+  if (!normalizedHostname) return "";
+
+  for (const [platform, hosts] of SUPPORTED_MEDIA_HOSTS) {
+    if (hosts.some((host) => normalizedHostname === host || normalizedHostname.endsWith(`.${host}`))) {
+      return platform;
+    }
+  }
+
+  return "";
 }
 
 function youtubeThumbnail(url) {
+  return youtubeThumbnailSources(url)[0] || "";
+}
+
+function youtubeThumbnailSources(url) {
   const videoId = youtubeVideoId(url);
-  return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : "";
+  if (!videoId) return [];
+
+  return YOUTUBE_THUMBNAIL_QUALITY_ORDER.map((quality) => (
+    `https://img.youtube.com/vi/${videoId}/${quality}.jpg`
+  ));
+}
+
+function isYoutubeThumbnailForVideo(thumbnailUrl, sourceUrl) {
+  const sourceVideoId = youtubeVideoId(sourceUrl);
+  if (!sourceVideoId) return false;
+
+  const parsed = parseHttpUrl(thumbnailUrl);
+  if (!parsed) return false;
+
+  const host = parsed.hostname.toLowerCase();
+  if (!/^(?:img\.youtube\.com|i(?:\d+)?\.ytimg\.com)$/.test(host)) return false;
+
+  const match = parsed.pathname.match(/^\/(?:vi|vi_webp)\/([^/]+)\//i);
+  return Boolean(match && match[1] === sourceVideoId);
 }
 
 function youtubeVideoId(url) {
-  const value = String(url || "");
-  const patterns = [
-    /youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/,
-    /youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/,
-    /youtu\.be\/([a-zA-Z0-9_-]+)/,
-  ];
-  for (const pattern of patterns) {
-    const match = value.match(pattern);
-    if (match) return match[1];
+  return extractYoutubeVideoIdFromUrl(url, 0) || "";
+}
+
+function extractYoutubeVideoIdFromUrl(url, depth) {
+  const parsed = parseHttpUrl(url);
+  if (!parsed) return "";
+  return extractYoutubeVideoIdFromParsedUrl(parsed, depth);
+}
+
+function extractYoutubeVideoIdFromParsedUrl(parsed, depth) {
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname || "";
+
+  if (!YOUTUBE_ALLOWED_HOSTS.has(host)) return "";
+
+  if (isYoutubeAttributionPath(path)) {
+    return extractYoutubeAttributionTargetVideoId(parsed, depth);
   }
+
+  if (host === "youtu.be" || host === "www.youtu.be") {
+    const idFromPath = path.replace(/^\/+/, "").split("/")[0] || "";
+    return YOUTUBE_VIDEO_ID_PATTERN.test(idFromPath) ? idFromPath : "";
+  }
+
+  for (const prefix of ["/shorts/", "/embed/", "/v/", "/live/"]) {
+    if (path.startsWith(prefix)) {
+      const id = path.slice(prefix.length).split("/")[0] || "";
+      if (YOUTUBE_VIDEO_ID_PATTERN.test(id)) return id;
+    }
+  }
+
+  if (isYoutubeWatchPath(path)) {
+    return getYoutubeWatchQueryVideoId(parsed.searchParams);
+  }
+
   return "";
+}
+
+function isYoutubeWatchPath(path) {
+  return (String(path || "").replace(/\/+$/, "") || "/") === "/watch";
+}
+
+function isYoutubeAttributionPath(path) {
+  return (String(path || "").replace(/\/+$/, "") || "/") === "/attribution_link";
+}
+
+function getYoutubeWatchQueryVideoId(searchParams) {
+  for (const key of ["v", "vi"]) {
+    for (const value of searchParams.getAll(key)) {
+      if (YOUTUBE_VIDEO_ID_PATTERN.test(value)) return value;
+    }
+  }
+
+  return "";
+}
+
+function extractYoutubeAttributionTargetVideoId(parsed, depth) {
+  if (depth >= 2) return "";
+
+  const targetUrl = parsed.searchParams.get("u")?.trim();
+  if (!targetUrl) return "";
+
+  try {
+    const parsedTargetUrl = new URL(targetUrl, parsed.origin);
+    return extractYoutubeVideoIdFromParsedUrl(parsedTargetUrl, depth + 1);
+  } catch {
+    return "";
+  }
+}
+
+function buildYoutubePreviewEmbedUrl(videoId) {
+  if (!YOUTUBE_VIDEO_ID_PATTERN.test(String(videoId || ""))) return "";
+
+  const params = new URLSearchParams({
+    enablejsapi: "1",
+    modestbranding: "1",
+    playsinline: "1",
+    rel: "0",
+    start: "0",
+  });
+
+  if (window.location?.origin) {
+    params.set("origin", window.location.origin);
+  }
+
+  return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
+}
+
+function buildYoutubeWatchUrl(videoId) {
+  return YOUTUBE_VIDEO_ID_PATTERN.test(String(videoId || ""))
+    ? `https://www.youtube.com/watch?v=${videoId}`
+    : "";
 }
 
 function setSaveState(message) {
