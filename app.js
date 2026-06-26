@@ -2004,7 +2004,7 @@ function normalizeFinalPathForCompare(value) {
 function renderThumb(item) {
   const imageUrl = item.thumbnail || youtubeThumbnail(item.sourceUrl);
   if (imageUrl) {
-    return `<span class="thumb"><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.add('thumb-fallback')"></span>`;
+    return `<span class="thumb"><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy" onerror="const parent=this.parentElement; this.remove(); parent?.classList.add('thumb-fallback')"></span>`;
   }
   return `<span class="thumb thumb-fallback">썸네일 없음</span>`;
 }
