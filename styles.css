@@ -134,12 +134,16 @@ h2 { font-size: 18px; font-weight: 700; }
 .tab-button,
 .icon-button,
 .row-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 36px;
   border: 1px solid transparent;
   border-radius: var(--radius);
   padding: 0 14px;
   font-weight: 600;
   font-size: 13.5px;
+  text-decoration: none;
   transition: background var(--t), color var(--t), border-color var(--t), opacity var(--t);
 }
 
@@ -162,7 +166,7 @@ h2 { font-size: 18px; font-weight: 700; }
   border-color: var(--line);
   color: var(--slate);
 }
-.ghost-button:hover { background: var(--hover); color: var(--text); }
+.ghost-button:hover { background: var(--hover); color: var(--text); text-decoration: none; }
 
 .danger-button {
   background: var(--red-soft);
@@ -1402,7 +1406,7 @@ h2 { font-size: 18px; font-weight: 700; }
   .topbar-actions {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
   }
   .quick-add { grid-template-columns: 1fr; }
@@ -1422,7 +1426,6 @@ h2 { font-size: 18px; font-weight: 700; }
 @media (max-width: 720px) {
   h1 { font-size: 22px; }
   .topbar-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .topbar-actions .primary-button { grid-column: span 2; }
   .summary-box { min-height: 82px; padding: 12px 14px; }
   .summary-box strong { font-size: 28px; }
   .table-head { grid-template-columns: 1fr; align-items: start; }
